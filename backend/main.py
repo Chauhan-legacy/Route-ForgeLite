@@ -93,7 +93,9 @@ class CalculateRouteRequest(BaseModel):
 
 class OptimizeRouteRequest(BaseModel):
     routeId: str
+    expectedRevision: Optional[int] = None
     options: Optional[Dict[str, Any]] = None
+    stops: Optional[List[Dict[str, Any]]] = None
 
 class ExportRouteRequest(BaseModel):
     routeId: str
@@ -283,7 +285,8 @@ async def api_calculate_route(req: CalculateRouteRequest):
 def api_optimize_route(req: OptimizeRouteRequest):
     try:
         route_data = database.get_route(req.routeId)
-        opt_res = optimizer.optimize_stops(route_data["stops"], options=req.options)
+        target_stops = req.stops if (req.stops and len(req.stops) >= 2) else route_data["stops"]
+        opt_res = optimizer.optimize_stops(target_stops, options=req.options)
         new_seq = [s["stopId"] for s in opt_res["stops"]]
 
         # Persist reordered sequence
@@ -298,6 +301,9 @@ def api_optimize_route(req: OptimizeRouteRequest):
                 "savingsPercent": opt_res["savingsPercent"],
                 "method": opt_res.get("method", "2-Opt Local Search"),
                 "isGloballyOptimal": opt_res.get("isGloballyOptimal", False),
+                "isAlreadyOptimal": opt_res.get("isAlreadyOptimal", False),
+                "analytics": opt_res.get("analytics"),
+                "beforeAfter": opt_res.get("beforeAfter"),
                 "stops": upd["stops"]
             },
             "revision": upd["revision"]

@@ -28,6 +28,16 @@ export interface Stop {
   metadata?: StopMetadata;
 }
 
+export interface Maneuver {
+  instruction: string;
+  streetName?: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  type?: string;
+  modifier?: string;
+  legIndex?: number;
+}
+
 export interface RouteSummary {
   totalDistanceMeters: number;
   totalDurationSeconds: number;
@@ -36,6 +46,7 @@ export interface RouteSummary {
   mode: TransportMode;
   liveTraffic: boolean;
   trafficStatus: string;
+  maneuvers?: Maneuver[];
 }
 
 export interface RouteSettings {
@@ -64,6 +75,20 @@ export interface OptimizationOptions {
   lockedStops: boolean;
 }
 
+export interface OptimizationAnalytics {
+  executionTimeMs: number;
+  algorithm: string;
+  matrixProvider: string;
+  fuelSavedLiters: number;
+  co2SavedKg: number;
+  timeSavedMinutes: number;
+  costSavedEst: number;
+  circuityRatio: number;
+  longestLegMeters: number;
+  averageLegMeters: number;
+  lockedStopsPreserved: number;
+}
+
 export interface OptimizationResult {
   originalDistanceMeters: number;
   optimizedDistanceMeters: number;
@@ -71,6 +96,16 @@ export interface OptimizationResult {
   savingsPercent: number;
   method: string;
   isGloballyOptimal: boolean;
+  isAlreadyOptimal?: boolean;
   targetStops: number;
   stops: Stop[];
+  analytics?: OptimizationAnalytics;
+  beforeAfter?: {
+    originalDistanceMeters: number;
+    optimizedDistanceMeters: number;
+    savingsMeters: number;
+    savingsPercent: number;
+    isAlreadyOptimal: boolean;
+    analytics?: OptimizationAnalytics;
+  };
 }

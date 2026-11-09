@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Stop } from '../types';
-import { Lock, Unlock, ArrowUp, ArrowDown, Trash2, Edit3, RotateCcw, UploadCloud, Zap, MapPin, Search, Navigation, Building2, Map as MapIcon, Compass } from 'lucide-react';
+import { Stop, OptimizationResult, Maneuver } from '../types';
+import { Lock, Unlock, ArrowUp, ArrowDown, Trash2, Edit3, RotateCcw, UploadCloud, Zap, MapPin, Search, Navigation, Building2, Map as MapIcon, Compass, X, ChevronDown, ChevronRight, Activity, SlidersHorizontal, Target } from 'lucide-react';
 import { searchLocations } from '../services/api';
 import { GeocodeSuggestion, parseDirectCoordinates } from '../services/geocodingService';
 
@@ -12,10 +12,20 @@ interface StopListProps {
   onDeleteStop: (stopId: string) => void;
   onEditStop: (stopId: string) => void;
   onOptimize: () => void;
+  onQuickOptimize?: () => void;
   onReverse: () => void;
   onOpenImport: () => void;
   isSaving: boolean;
   mapCenter?: { lat: number; lng: number };
+  optimizationResult?: OptimizationResult | null;
+  canRevert?: boolean;
+  onRevertOptimization?: () => void;
+  onDismissOptimization?: () => void;
+  onOpenAnalytics?: () => void;
+  maneuvers?: Maneuver[];
+  onClearAll?: () => void;
+  isPinpointMode?: boolean;
+  onTogglePinpointMode?: () => void;
 }
 
 export const StopList: React.FC<StopListProps> = ({
@@ -26,10 +36,20 @@ export const StopList: React.FC<StopListProps> = ({
   onDeleteStop,
   onEditStop,
   onOptimize,
+  onQuickOptimize,
   onReverse,
   onOpenImport,
   isSaving,
   mapCenter,
+  optimizationResult,
+  canRevert,
+  onRevertOptimization,
+  onDismissOptimization,
+  onOpenAnalytics,
+  maneuvers = [],
+  onClearAll,
+  isPinpointMode,
+  onTogglePinpointMode,
 }) => {
   const [inputVal, setInputVal] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -37,6 +57,7 @@ export const StopList: React.FC<StopListProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showManeuvers, setShowManeuvers] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const debounceTimerRef = useRef<any>(null);
@@ -241,46 +262,168 @@ export const StopList: React.FC<StopListProps> = ({
         )}
 
         {/* Quick Actions Row */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              if (onQuickOptimize) {
+                onQuickOptimize();
+              } else {
+                onOptimize();
+              }
+            }}
+            disabled={isSaving}
+            className={`flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-xl font-medium text-xs transition-colors shadow-subtle ${
+              stops.length < 3
+                ? 'bg-editorial-subsurface hover:bg-editorial-muted text-editorial-subtle border border-editorial-border cursor-pointer'
+                : 'bg-editorial-ink hover:bg-editorial-accent-hover text-editorial-bg cursor-pointer'
+            }`}
+            title={stops.length < 3 ? `Add ${3 - stops.length} more waypoint(s) to optimize tour` : 'Optimize tour sequence now (1-click)'}
+          >
+            <Zap className={`w-3.5 h-3.5 ${stops.length < 3 ? 'text-editorial-subtle' : 'text-amber-400'}`} />
+            <span>{stops.length < 3 ? `Optimize (${stops.length}/3 Waypoints)` : 'Optimize Tour'}</span>
+          </button>
+
           <button
             onClick={onOptimize}
-            disabled={stops.length < 3 || isSaving}
-            className="flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-xl bg-editorial-ink hover:bg-editorial-accent-hover text-editorial-bg font-medium text-xs transition-colors disabled:opacity-40"
+            disabled={isSaving}
+            className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors shadow-subtle flex-shrink-0"
+            title="Optimization Constraints & Settings"
           >
-            <Zap className="w-3.5 h-3.5" />
-            <span>Optimize Tour</span>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-editorial-subtle" />
           </button>
 
           <button
             onClick={onOpenImport}
-            className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-xs font-medium text-editorial-body transition-colors shadow-subtle"
+            className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-xs font-medium text-editorial-body transition-colors shadow-subtle flex-shrink-0"
             title="Import addresses or CSV"
           >
             <UploadCloud className="w-3.5 h-3.5 text-editorial-subtle" />
-            <span>Import</span>
+            <span className="hidden sm:inline">Import</span>
           </button>
+
+          {onTogglePinpointMode && (
+            <button
+              type="button"
+              onClick={onTogglePinpointMode}
+              className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl border text-xs font-medium transition-all shadow-subtle flex-shrink-0 ${
+                isPinpointMode
+                  ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
+                  : 'bg-editorial-surface hover:bg-editorial-subsurface border-editorial-border text-editorial-body'
+              }`}
+              title={isPinpointMode ? 'Crosshair active: Click map to place pin' : 'Click to drop pin on map'}
+            >
+              <Target className={`w-3.5 h-3.5 ${isPinpointMode ? 'text-white' : 'text-rose-600'}`} />
+              <span>{isPinpointMode ? 'Drop...' : 'Drop Pin'}</span>
+            </button>
+          )}
 
           <button
             onClick={onReverse}
             disabled={stops.length < 2 || isSaving}
-            className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors disabled:opacity-40 shadow-subtle"
+            className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors disabled:opacity-40 shadow-subtle flex-shrink-0"
             title="Reverse Route Sequence"
           >
             <RotateCcw className="w-3.5 h-3.5 text-editorial-subtle" />
           </button>
+
+          {onClearAll && stops.length > 0 && (
+            <button
+              onClick={onClearAll}
+              disabled={isSaving}
+              className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-rose-50 border border-editorial-border hover:border-rose-200 text-editorial-body hover:text-rose-600 flex items-center justify-center transition-colors shadow-subtle flex-shrink-0"
+              title="Clear all waypoints (Start fresh with a clean map)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
+
+        {/* Native Optimization Before/After Comparison Card */}
+        {optimizationResult && (
+          <div className="p-3 rounded-xl bg-editorial-subsurface border border-editorial-border flex flex-col gap-2 animate-in fade-in duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${optimizationResult.isAlreadyOptimal ? 'bg-amber-500' : 'bg-emerald-600'}`} />
+                <span className="text-xs font-semibold text-editorial-ink">
+                  {optimizationResult.isAlreadyOptimal ? 'Route Already Optimal' : 'Tour Optimized'}
+                </span>
+              </div>
+              {onDismissOptimization && (
+                <button
+                  onClick={onDismissOptimization}
+                  className="text-editorial-subtle hover:text-editorial-ink text-xs p-0.5 rounded"
+                  title="Dismiss comparison"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {optimizationResult.isAlreadyOptimal ? (
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-editorial-subtle">
+                  The current stop sequence is already at minimum distance.
+                </p>
+                {onOpenAnalytics && (
+                  <button
+                    onClick={onOpenAnalytics}
+                    className="px-2 py-0.5 rounded-lg bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-[10px] font-medium text-emerald-800 flex items-center gap-1 transition-colors ml-2 flex-shrink-0"
+                    title="View computational diagnostics"
+                  >
+                    <Activity className="w-3 h-3 text-emerald-600" />
+                    <span>Audit</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-editorial-subtle">
+                    {(optimizationResult.originalDistanceMeters / 1000).toFixed(1)} km &rarr;{' '}
+                    <strong className="text-emerald-700">{(optimizationResult.optimizedDistanceMeters / 1000).toFixed(1)} km</strong>
+                  </span>
+                  <span className="font-mono font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 text-[10px]">
+                    -{optimizationResult.savingsPercent}% (-{(optimizationResult.savingsMeters / 1000).toFixed(1)} km)
+                  </span>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-editorial-border/60">
+                  {onOpenAnalytics && (
+                    <button
+                      onClick={onOpenAnalytics}
+                      className="px-2.5 py-1 rounded-lg bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-[11px] font-medium text-emerald-800 flex items-center gap-1 transition-colors shadow-subtle"
+                      title="Inspect computational audit and savings analytics"
+                    >
+                      <Activity className="w-3 h-3 text-emerald-600" />
+                      <span>Analytics</span>
+                    </button>
+                  )}
+                  {canRevert && onRevertOptimization && (
+                    <button
+                      onClick={onRevertOptimization}
+                      className="px-2.5 py-1 rounded-lg bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-[11px] font-medium text-editorial-body flex items-center gap-1 transition-colors shadow-subtle"
+                      title="Undo optimization and restore original waypoint order"
+                    >
+                      <RotateCcw className="w-3 h-3 text-editorial-subtle" />
+                      <span>Revert Order</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Stops Sequence Deck */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {stops.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 text-editorial-subtle">
-            <div className="w-10 h-10 rounded-full bg-editorial-subsurface border border-editorial-border flex items-center justify-center mb-2.5">
-              <MapPin className="w-4 h-4 text-editorial-subtle" />
+            <div className="w-12 h-12 rounded-full bg-editorial-surface border border-editorial-border shadow-subtle flex items-center justify-center mb-3 text-editorial-ink">
+              <MapPin className="w-5 h-5 text-editorial-subtle" />
             </div>
-            <h4 className="font-serif text-base font-medium text-editorial-ink">No waypoints added</h4>
-            <p className="text-xs text-editorial-subtle mt-1 max-w-[220px]">
-              Search with real-time suggestions, paste coordinates/links, or click Drop Pin on the map.
+            <h4 className="font-serif text-base font-medium text-editorial-ink">Clean Map Ready</h4>
+            <p className="text-xs text-editorial-subtle mt-1.5 max-w-[240px] leading-relaxed">
+              No waypoints plotted. Search an address or coordinate above to place your first stop.
             </p>
           </div>
         ) : (
@@ -414,6 +557,41 @@ export const StopList: React.FC<StopListProps> = ({
           })
         )}
       </div>
+
+      {/* Collapsible Turn-by-Turn Guidance Drawer */}
+      {maneuvers && maneuvers.length > 0 && (
+        <div className="border-t border-editorial-border bg-editorial-surface flex flex-col flex-shrink-0">
+          <button
+            onClick={() => setShowManeuvers(prev => !prev)}
+            className="p-3 flex items-center justify-between text-xs font-semibold text-editorial-ink hover:bg-editorial-subsurface transition-colors"
+          >
+            <div className="flex items-center gap-1.5">
+              <Navigation className="w-3.5 h-3.5 text-editorial-subtle" />
+              <span>Turn-by-Turn Guidance ({maneuvers.length} steps)</span>
+            </div>
+            {showManeuvers ? (
+              <ChevronDown className="w-3.5 h-3.5 text-editorial-subtle" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 text-editorial-subtle" />
+            )}
+          </button>
+          {showManeuvers && (
+            <div className="max-h-[170px] overflow-y-auto px-3 pb-3 space-y-1 text-[11px]">
+              {maneuvers.map((m, mIdx) => (
+                <div key={mIdx} className="p-2 rounded-lg bg-editorial-subsurface border border-editorial-border flex items-start gap-2">
+                  <span className="mono text-[10px] text-editorial-subtle font-semibold mt-0.5">{mIdx + 1}.</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-editorial-ink font-medium leading-tight">{m.instruction}</p>
+                    <p className="text-[10px] text-editorial-subtle font-mono mt-0.5">
+                      {m.distanceMeters > 1000 ? `${(m.distanceMeters / 1000).toFixed(1)} km` : `${m.distanceMeters} m`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

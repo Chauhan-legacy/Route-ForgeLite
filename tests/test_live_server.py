@@ -5,9 +5,15 @@ Verifies HTTP 200, frontend delivery (HTML/CSS/JS), and full REST API functional
 import urllib.request
 import json
 import sys
+import pytest
 
 def test():
     base = 'http://127.0.0.1:8000'
+    try:
+        urllib.request.urlopen(f'{base}/api/health', timeout=1.0)
+    except Exception:
+        pytest.skip("RouteForge server is not currently running on http://127.0.0.1:8000")
+
     print('[1/9] Testing Frontend HTML delivery...')
     resp = urllib.request.urlopen(f'{base}/')
     assert resp.status == 200, f'Expected 200, got {resp.status}'
@@ -93,7 +99,7 @@ def test():
     assert rev_res['revision'] == rev
     print(f'  -> getRouteRevision OK: {rev_res["revision"]}')
 
-    print('[9/9] Testing API /api/exportRoute...')
+    print('[9/10] Testing API /api/exportRoute...')
     req = urllib.request.Request(
         f'{base}/api/exportRoute',
         data=json.dumps({'routeId': r_id, 'format': 'csv'}).encode('utf-8'),
@@ -106,8 +112,21 @@ def test():
     assert 'Vienna' in exp_res['data']['content']
     print(f'  -> exportRoute OK: CSV generated with size {len(exp_res["data"]["content"])} bytes')
 
+    print('[10/10] Testing API /api/deleteRoute...')
+    req = urllib.request.Request(
+        f'{base}/api/deleteRoute',
+        data=json.dumps({'routeId': r_id}).encode('utf-8'),
+        headers={'Content-Type': 'application/json'}
+    )
+    resp = urllib.request.urlopen(req)
+    assert resp.status == 200
+    del_res = json.loads(resp.read().decode('utf-8'))
+    assert del_res['ok'] is True
+    assert del_res['data']['deleted'] is True
+    print(f'  -> deleteRoute OK: routeId {r_id} successfully deleted')
+
     print('\n=============================================')
-    print('ALL 9 LIVE INTEGRATION TESTS PASSED!')
+    print('ALL 10 LIVE INTEGRATION TESTS PASSED!')
     print('=============================================')
 
 if __name__ == '__main__':

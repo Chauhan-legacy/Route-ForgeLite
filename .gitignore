@@ -15,6 +15,7 @@ __pycache__/
 database/*.db-journal
 database/*.db-wal
 database/*.db-shm
+database/*.pid
 
 # Environment & Credentials
 .env

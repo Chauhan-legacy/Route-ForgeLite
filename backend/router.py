@@ -93,7 +93,7 @@ async def compute_route(
 
     coord_str = ";".join(f"{float(s['longitude']):.6f},{float(s['latitude']):.6f}" for s in valid_stops)
     base_url = OSRM_ENDPOINTS.get(clean_mode, OSRM_ENDPOINTS["driving"])
-    url = f"{base_url}/{coord_str}?overview=full&geometries=geojson&steps=false"
+    url = f"{base_url}/{coord_str}?overview=full&geometries=geojson&steps=true"
     headers = {
         "Accept": "application/json",
         "User-Agent": USER_AGENT
@@ -147,6 +147,43 @@ async def compute_route(
             for idx, leg in enumerate(top.get("legs", []))
         ]
 
+        maneuvers = []
+        for leg_idx, leg in enumerate(top.get("legs", [])):
+            for step in leg.get("steps", []):
+                m = step.get("maneuver", {})
+                street_name = step.get("name", "")
+                m_type = m.get("type", "turn")
+                m_modifier = m.get("modifier", "")
+
+                if street_name:
+                    if m_modifier:
+                        instruction = f"{m_type.capitalize()} {m_modifier} onto {street_name}"
+                    else:
+                        instruction = f"Proceed on {street_name}"
+                else:
+                    instruction = f"{m_type.capitalize()} {m_modifier}".strip() or "Continue"
+
+                maneuvers.append({
+                    "instruction": instruction,
+                    "streetName": street_name,
+                    "distanceMeters": round(step.get("distance", 0)),
+                    "durationSeconds": round(step.get("duration", 0)),
+                    "type": m_type,
+                    "modifier": m_modifier,
+                    "legIndex": leg_idx
+                })
+
+        snapped_waypoints = []
+        for wp in json_data.get("waypoints", []):
+            loc = wp.get("location")
+            if loc and len(loc) >= 2:
+                snapped_waypoints.append({
+                    "longitude": loc[0],
+                    "latitude": loc[1],
+                    "name": wp.get("name", ""),
+                    "distanceToRoadMeters": round(wp.get("distance", 0), 1)
+                })
+
         return {
             "ok": True,
             "data": {
@@ -154,6 +191,8 @@ async def compute_route(
                 "geometry": top.get("geometry"),
                 "totalDistanceMeters": round(top.get("distance", 0)),
                 "totalDurationSeconds": round(top.get("duration", 0)),
+                "maneuvers": maneuvers,
+                "snappedWaypoints": snapped_waypoints,
                 "provider": "osrm",
                 "isFallback": False,
                 "mode": clean_mode,

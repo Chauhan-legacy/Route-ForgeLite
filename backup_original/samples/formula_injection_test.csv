@@ -1,7 +1,0 @@
-Name,Address
-"=SUM(1+1)","Stephansplatz 1, Wien"
-"+123456789","Prinz Eugen-Straße 10, Wien"
-"-100","Opernring 5, Wien"
-"@special_handle","Herrengasse 5, Wien"
-"=CMD('calc')","Riesenradplatz 2, Wien"
-

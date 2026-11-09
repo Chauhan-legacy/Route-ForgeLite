@@ -19,8 +19,8 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
 }) => {
   const [objective, setObjective] = useState<'distance' | 'duration'>('distance');
   const [returnToStart, setReturnToStart] = useState<boolean>(false);
-  const [fixStart, setFixStart] = useState<boolean>(true);
-  const [fixEnd, setFixEnd] = useState<boolean>(false);
+  const [fixedStart, setFixedStart] = useState<boolean>(true);
+  const [fixedEnd, setFixedEnd] = useState<boolean>(false);
   const [isOptimizing, setIsOptimizing] = useState<boolean>(false);
 
   if (!isOpen) return null;
@@ -31,8 +31,9 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
       await onRunOptimization({
         objective,
         returnToStart,
-        fixStart,
-        fixEnd
+        fixedStart,
+        fixedEnd,
+        lockedStops: true
       });
       onClose();
     } finally {
@@ -113,8 +114,8 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
               </div>
               <input
                 type="checkbox"
-                checked={fixStart}
-                onChange={(e) => setFixStart(e.target.checked)}
+                checked={fixedStart}
+                onChange={(e) => setFixedStart(e.target.checked)}
                 className="w-4 h-4 rounded text-editorial-ink accent-editorial-ink"
               />
             </label>
@@ -130,7 +131,7 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
                 checked={returnToStart}
                 onChange={(e) => {
                   setReturnToStart(e.target.checked);
-                  if (e.target.checked) setFixEnd(false);
+                  if (e.target.checked) setFixedEnd(false);
                 }}
                 className="w-4 h-4 rounded text-editorial-ink accent-editorial-ink"
               />
@@ -145,8 +146,8 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
                 </div>
                 <input
                   type="checkbox"
-                  checked={fixEnd}
-                  onChange={(e) => setFixEnd(e.target.checked)}
+                  checked={fixedEnd}
+                  onChange={(e) => setFixedEnd(e.target.checked)}
                   className="w-4 h-4 rounded text-editorial-ink accent-editorial-ink"
                 />
               </label>

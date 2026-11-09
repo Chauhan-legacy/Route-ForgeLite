@@ -9,18 +9,33 @@ import { reverseGeocodeCoordinates, searchLocationSuggestions, GeocodeSuggestion
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 let isBackendAvailable = true;
+let healthCheckDone = false;
 
 export async function checkBackendHealth(): Promise<boolean> {
+  if (healthCheckDone && !isBackendAvailable) {
+    return false;
+  }
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 750);
     const res = await fetch(`${API_BASE}/api/health`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      isBackendAvailable = false;
+      healthCheckDone = true;
+      return false;
+    }
     const data = await res.json();
-    isBackendAvailable = res.ok && data.ok;
+    isBackendAvailable = !!(data && data.ok);
+    healthCheckDone = true;
     return isBackendAvailable;
   } catch {
     isBackendAvailable = false;
+    healthCheckDone = true;
     return false;
   }
 }
@@ -89,6 +104,20 @@ export async function createRoute(title = 'New Mission Run'): Promise<{ routeId:
   };
   localStorage.setItem(`rf_route_${routeId}`, JSON.stringify(routeObj));
   return { routeId, revision: 1 };
+}
+
+export async function deleteRoute(routeId: string): Promise<boolean> {
+  if (isBackendAvailable) {
+    try {
+      const res = await postApi('deleteRoute', { routeId });
+      return !!res.data?.deleted;
+    } catch (e) {
+      console.warn("Backend deleteRoute failed, removing from local storage:", e);
+    }
+  }
+
+  localStorage.removeItem(`rf_route_${routeId}`);
+  return true;
 }
 
 export async function addStop(
@@ -269,7 +298,7 @@ export async function optimizeRoute(
 ): Promise<OptimizationResult & { revision: number }> {
   if (isBackendAvailable) {
     try {
-      const res = await postApi('optimizeRoute', { routeId, options });
+      const res = await postApi('optimizeRoute', { routeId, options, stops });
       return {
         ...res.data,
         revision: res.revision,

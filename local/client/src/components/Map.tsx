@@ -45,6 +45,18 @@ export const Map: React.FC<MapProps> = ({
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const isLoadedRef = useRef<boolean>(false);
+  const hasFittedInitialBoundsRef = useRef<boolean>(false);
+  const isPinpointModeRef = useRef<boolean>(!!isPinpointMode);
+
+  useEffect(() => {
+    isPinpointModeRef.current = !!isPinpointMode;
+    if (mapContainerRef.current) {
+      const canvas = mapContainerRef.current.querySelector('.maplibregl-canvas') as HTMLElement | null;
+      if (canvas) {
+        canvas.style.cursor = isPinpointMode ? 'crosshair' : '';
+      }
+    }
+  }, [isPinpointMode]);
 
   const [activeStyleKey, setActiveStyleKey] = useState<keyof typeof OPENFREEMAP_STYLES>('positron');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -142,8 +154,9 @@ export const Map: React.FC<MapProps> = ({
       });
     }
 
-    // Fit route bounds
-    if (geojsonData.geometry.coordinates.length > 1) {
+    // Fit route bounds ONLY once on initial route load, never during user drag/pan/scroll
+    if (!hasFittedInitialBoundsRef.current && geojsonData.geometry.coordinates.length > 1) {
+      hasFittedInitialBoundsRef.current = true;
       const bounds = new maplibregl.LngLatBounds();
       geojsonData.geometry.coordinates.forEach(coord => bounds.extend(coord));
       map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
@@ -192,9 +205,10 @@ export const Map: React.FC<MapProps> = ({
     const handleResize = () => map.resize();
     window.addEventListener('resize', handleResize);
 
-    // Map click handler for adding waypoints
+    // Map click handler: ONLY active when Pinpoint Mode is explicitly turned on by the user!
+    // In normal mode, clicking on the map simply navigates the map naturally without plotting anything.
     map.on('click', (e) => {
-      if (onMapClick) {
+      if (isPinpointModeRef.current && onMapClick) {
         onMapClick(e.lngLat.lat, e.lngLat.lng);
       }
     });
@@ -308,9 +322,11 @@ export const Map: React.FC<MapProps> = ({
       });
 
       el.style.cursor = 'grab';
+      el.style.userSelect = 'none';
+      (el.style as any).webkitUserSelect = 'none';
       el.title = `Stop ${idx + 1}: ${stop.name} (Drag to pinpoint exact position)`;
 
-      const marker = new maplibregl.Marker({ element: el, draggable: true })
+      const marker = new maplibregl.Marker({ element: el, draggable: true, anchor: 'center' })
         .setLngLat([stop.resolvedLng, stop.resolvedLat])
         .setPopup(popup)
         .addTo(map);
@@ -322,6 +338,7 @@ export const Map: React.FC<MapProps> = ({
       marker.on('dragend', () => {
         el.style.cursor = 'grab';
         const lngLat = marker.getLngLat();
+        marker.setLngLat(lngLat); // Anchor immediately without coordinate drift
         if (onStopMove) {
           onStopMove(stop.stopId, lngLat.lat, lngLat.lng);
         }
@@ -330,8 +347,9 @@ export const Map: React.FC<MapProps> = ({
       markersRef.current.push(marker);
     });
 
-    // Auto-fit if stops exist and no geometry rendered yet
-    if (validStops.length > 0 && !routeGeometry) {
+    // Auto-fit if stops exist and no geometry rendered yet (only on initial load)
+    if (!hasFittedInitialBoundsRef.current && validStops.length > 0 && !routeGeometry) {
+      hasFittedInitialBoundsRef.current = true;
       const bounds = new maplibregl.LngLatBounds();
       validStops.forEach(s => bounds.extend([s.resolvedLng, s.resolvedLat]));
       map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 600 });
