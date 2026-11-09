@@ -12,6 +12,7 @@ __pycache__/
 .pytest_cache/
 
 # Local Database & User State
+database/*.db
 database/*.db-journal
 database/*.db-wal
 database/*.db-shm

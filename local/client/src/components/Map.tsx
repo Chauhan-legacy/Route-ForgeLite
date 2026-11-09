@@ -48,6 +48,16 @@ export const Map: React.FC<MapProps> = ({
   const hasFittedInitialBoundsRef = useRef<boolean>(false);
   const prevStopsCountRef = useRef<number>(stops.length);
   const isPinpointModeRef = useRef<boolean>(!!isPinpointMode);
+  const onMapClickRef = useRef(onMapClick);
+  const onMapCenterChangeRef = useRef(onMapCenterChange);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+
+  useEffect(() => {
+    onMapCenterChangeRef.current = onMapCenterChange;
+  }, [onMapCenterChange]);
 
   useEffect(() => {
     isPinpointModeRef.current = !!isPinpointMode;
@@ -209,16 +219,16 @@ export const Map: React.FC<MapProps> = ({
     // Map click handler: ONLY active when Pinpoint Mode is explicitly turned on by the user!
     // In normal mode, clicking on the map simply navigates the map naturally without plotting anything.
     map.on('click', (e) => {
-      if (isPinpointModeRef.current && onMapClick) {
-        onMapClick(e.lngLat.lat, e.lngLat.lng);
+      if (isPinpointModeRef.current && onMapClickRef.current) {
+        onMapClickRef.current(e.lngLat.lat, e.lngLat.lng);
       }
     });
 
     // Notify map center changes for viewport-biased autocomplete
     map.on('moveend', () => {
-      if (onMapCenterChange) {
+      if (onMapCenterChangeRef.current) {
         const c = map.getCenter();
-        onMapCenterChange({ lat: c.lat, lng: c.lng });
+        onMapCenterChangeRef.current({ lat: c.lat, lng: c.lng });
       }
     });
 

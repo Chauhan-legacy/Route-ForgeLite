@@ -90,6 +90,7 @@ class CalculateRouteRequest(BaseModel):
     provider: Optional[str] = "osrm"
     mode: Optional[str] = "driving"
     allowFallback: Optional[bool] = True
+    stops: Optional[List[Dict[str, Any]]] = None
 
 class OptimizeRouteRequest(BaseModel):
     routeId: str
@@ -269,9 +270,14 @@ def api_update_stop(req: UpdateStopRequest):
 @app.post("/api/calculateRoute")
 async def api_calculate_route(req: CalculateRouteRequest):
     try:
-        route_data = database.get_route(req.routeId)
+        if req.stops and len(req.stops) >= 2:
+            target_stops = req.stops
+        else:
+            route_data = database.get_route(req.routeId)
+            target_stops = route_data["stops"]
+
         res = await router.compute_route(
-            route_data["stops"],
+            target_stops,
             provider=req.provider or "osrm",
             mode=req.mode or "driving",
             allow_fallback=req.allowFallback

@@ -278,6 +278,7 @@ export async function calculateRoute(
     try {
       const res = await postApi('calculateRoute', {
         routeId,
+        stops,
         provider: 'osrm',
         mode,
         allowFallback: true,

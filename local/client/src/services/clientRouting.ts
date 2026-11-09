@@ -419,36 +419,66 @@ export async function clientGeocodeAddress(address: string): Promise<{
     return { lat: cached.lat, lng: cached.lng, status: 'ok', displayName: cached.displayName };
   }
 
-  // Throttle to 1.1s to respect OpenStreetMap Nominatim Free Usage Policy
-  const now = Date.now();
-  const timeSinceLast = now - lastGeocodeTime;
-  if (timeSinceLast < 1100) {
-    await new Promise(r => setTimeout(r, 1100 - timeSinceLast));
+  // 1. Direct coordinate parser check (e.g. "37.7749, -122.4194")
+  const coordMatch = address.trim().match(/^(-?\d{1,2}(?:\.\d+)?)[,\s]+(-?\d{1,3}(?:\.\d+)?)$/);
+  if (coordMatch) {
+    const cLat = parseFloat(coordMatch[1]);
+    const cLng = parseFloat(coordMatch[2]);
+    if (Math.abs(cLat) <= 90 && Math.abs(cLng) <= 180) {
+      const res = { lat: cLat, lng: cLng, status: 'ok' as const, displayName: `${cLat.toFixed(5)}, ${cLng.toFixed(5)}` };
+      geocodeCache.set(norm, res);
+      return res;
+    }
   }
-  lastGeocodeTime = Date.now();
 
+  // 2. High-speed Komoot Photon Geocoding (CORS enabled, < 150ms response, zero block)
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=2`;
-    const resp = await fetch(url, {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!resp.ok) {
-      return { lat: null, lng: null, status: 'error', displayName: `HTTP ${resp.status}` };
+    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(address)}&limit=1`;
+    const pResp = await fetch(photonUrl);
+    if (pResp.ok) {
+      const pData = await pResp.json();
+      if (pData?.features && pData.features.length > 0) {
+        const f = pData.features[0];
+        const [pLng, pLat] = f.geometry.coordinates;
+        const pProps = f.properties || {};
+        const title = pProps.name || address;
+        const sub = [pProps.city || pProps.town, pProps.state, pProps.country].filter(Boolean).join(', ');
+        const full = sub ? `${title}, ${sub}` : title;
+        const res = { lat: pLat, lng: pLng, status: 'ok' as const, displayName: full };
+        geocodeCache.set(norm, res);
+        return res;
+      }
     }
-    const data = await resp.json();
-    if (!data || data.length === 0) {
-      return { lat: null, lng: null, status: 'not_found', displayName: 'Location not found' };
-    }
-    const best = data[0];
-    const lat = parseFloat(best.lat);
-    const lng = parseFloat(best.lon);
-    const status = data.length > 1 ? 'ambiguous' : 'ok';
-    const displayName = best.display_name;
-
-    geocodeCache.set(norm, { lat, lng, displayName });
-    return { lat, lng, status, displayName };
-  } catch (err: any) {
-    return { lat: null, lng: null, status: 'error', displayName: err.message || 'Geocode error' };
+  } catch (err) {
+    console.warn('Photon geocode fallback:', err);
   }
+
+  // 3. Fallback to OpenStreetMap Nominatim
+  try {
+    const now = Date.now();
+    const timeSinceLast = now - lastGeocodeTime;
+    if (timeSinceLast < 1100) {
+      await new Promise(r => setTimeout(r, 1100 - timeSinceLast));
+    }
+    lastGeocodeTime = Date.now();
+
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.length > 0) {
+        const best = data[0];
+        const lat = parseFloat(best.lat);
+        const lng = parseFloat(best.lon);
+        const res = { lat, lng, status: 'ok' as const, displayName: best.display_name };
+        geocodeCache.set(norm, res);
+        return res;
+      }
+    }
+  } catch (err: any) {
+    console.warn('Nominatim fallback error:', err);
+  }
+
+  return { lat: null, lng: null, status: 'not_found', displayName: 'Location not found' };
 }
 

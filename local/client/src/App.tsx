@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { RouteData, Stop, RouteSummary, TransportMode, OptimizationOptions, OptimizationResult } from './types';
 import * as api from './services/api';
-import { clientGeocodeAddress, TRAFFIC_DISCLAIMER } from './services/clientRouting';
+import { clientGeocodeAddress, haversineDistance, TRAFFIC_DISCLAIMER } from './services/clientRouting';
 import { Header } from './components/Header';
 import { MetricsBar } from './components/MetricsBar';
 import { StopList } from './components/StopList';
@@ -67,13 +67,41 @@ export const App: React.FC = () => {
       return;
     }
 
+    // 1. Instant 0ms optimistic connection line between waypoints
+    const immediateCoords = validStops.map(s => [
+      (s.lng ?? s.longitude)!,
+      (s.lat ?? s.latitude)!
+    ]);
+    setRouteGeometry({
+      type: 'LineString',
+      coordinates: immediateCoords
+    });
+
+    let approxDist = 0;
+    for (let i = 0; i < validStops.length - 1; i++) {
+      approxDist += haversineDistance(
+        (validStops[i].lat ?? validStops[i].latitude)!,
+        (validStops[i].lng ?? validStops[i].longitude)!,
+        (validStops[i + 1].lat ?? validStops[i + 1].latitude)!,
+        (validStops[i + 1].lng ?? validStops[i + 1].longitude)!
+      );
+    }
+    const speed = mode === 'walking' ? 1.25 : mode === 'cycling' ? 4.17 : 13.88;
+    setSummary(prev => ({
+      ...prev,
+      totalDistanceMeters: Math.round(approxDist),
+      totalDurationSeconds: Math.round(approxDist / speed),
+      mode
+    }));
+
+    // 2. Fetch full road geometry & turn maneuvers asynchronously
     try {
-      const calcData = await api.calculateRoute(routeId || 'current', validStops, mode);
-      if (calcData) {
-        setRouteGeometry(calcData.geometry || null);
+      const calcData = await api.calculateRoute(routeId || currentRoute?.routeId || 'current', validStops, mode);
+      if (calcData && calcData.geometry) {
+        setRouteGeometry(calcData.geometry);
         setSummary({
-          totalDistanceMeters: calcData.totalDistanceMeters ?? calcData.summary?.totalDistanceMeters ?? 0,
-          totalDurationSeconds: calcData.totalDurationSeconds ?? calcData.summary?.totalDurationSeconds ?? 0,
+          totalDistanceMeters: calcData.totalDistanceMeters ?? calcData.summary?.totalDistanceMeters ?? Math.round(approxDist),
+          totalDurationSeconds: calcData.totalDurationSeconds ?? calcData.summary?.totalDurationSeconds ?? Math.round(approxDist / speed),
           provider: calcData.provider ?? calcData.summary?.provider ?? 'osrm',
           isFallback: !!(calcData.isFallback ?? calcData.summary?.isFallback),
           mode,
@@ -85,7 +113,7 @@ export const App: React.FC = () => {
     } catch (err: any) {
       console.warn('Route calculation error:', err);
     }
-  }, []);
+  }, [currentRoute?.routeId]);
 
   // Initial Route Load
   useEffect(() => {
@@ -181,8 +209,19 @@ export const App: React.FC = () => {
 
   // Map Click Waypoint Placement with Instant Optimistic Placement (Zero Lag)
   const handleMapClick = async (lat: number, lng: number) => {
-    if (!currentRoute) return;
     setIsPinpointMode(false); // Immediately dismiss crosshair mode
+
+    let route = currentRoute;
+    if (!route) {
+      try {
+        const created = await api.createRoute('New Logistics Route');
+        route = { routeId: created.routeId, title: 'New Logistics Route', revision: created.revision, status: 'active' };
+        setCurrentRoute(route);
+      } catch (e) {
+        route = { routeId: `rf_${Date.now().toString(36)}`, title: 'New Route', revision: 1, status: 'active' };
+        setCurrentRoute(route);
+      }
+    }
 
     // 1. Instant optimistic waypoint creation in < 1ms
     const tempName = `Waypoint ${stops.length + 1}`;
@@ -191,7 +230,7 @@ export const App: React.FC = () => {
 
     const newStop: Stop = {
       stopId: tempStopId,
-      routeId: currentRoute.routeId,
+      routeId: route.routeId,
       sequence: stops.length,
       name: tempName,
       address: tempAddress,
@@ -209,12 +248,12 @@ export const App: React.FC = () => {
     const updatedStops = [...stops, newStop];
     setStops(updatedStops);
     showToast(`Placed pin: ${tempName}`, 'success');
-    updateRouteCalculation(updatedStops, summary.mode, currentRoute.routeId);
+    updateRouteCalculation(updatedStops, summary.mode, route.routeId);
 
     // 2. Persist in background and asynchronously enrich with street name
     try {
       const res = await api.addStop(
-        currentRoute.routeId,
+        route.routeId,
         revision,
         tempAddress,
         tempName,
@@ -228,7 +267,7 @@ export const App: React.FC = () => {
       api.reverseGeocode(lat, lng).then(rev => {
         if (rev && rev.title) {
           setStops(curr => curr.map(s => s.stopId === res.stop.stopId || s.stopId === tempStopId ? { ...s, name: rev.title, address: rev.fullAddress } : s));
-          api.updateStop(currentRoute.routeId, res.revision, res.stop.stopId, { name: rev.title, address: rev.fullAddress }).catch(() => {});
+          api.updateStop(route.routeId, res.revision, res.stop.stopId, { name: rev.title, address: rev.fullAddress }).catch(() => {});
         }
       }).catch(() => {});
     } catch (err: any) {
