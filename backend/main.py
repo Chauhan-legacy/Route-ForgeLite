@@ -111,6 +111,9 @@ class ReverseGeocodeRequest(BaseModel):
 class ImportSheetsRequest(BaseModel):
     spreadsheetId: str
 
+class ParseCsvRequest(BaseModel):
+    csvText: str
+
 # API Endpoints
 @app.get("/api/health")
 def api_health():
@@ -360,6 +363,13 @@ async def api_reverse_geocode(req: ReverseGeocodeRequest):
 async def api_import_sheets(req: ImportSheetsRequest):
     res = await sheets_importer.import_from_published_sheets(req.spreadsheetId)
     return res
+
+@app.post("/api/parseCsv")
+def api_parse_csv(req: ParseCsvRequest):
+    ok, stops, warnings, err = csv_handler.parse_csv_stops(req.csvText)
+    if not ok:
+        return JSONResponse(status_code=400, content={"ok": False, "error": err, "warnings": warnings})
+    return {"ok": True, "data": {"stops": stops, "warnings": warnings}}
 
 @app.get("/api/listRoutes")
 def api_list_routes():

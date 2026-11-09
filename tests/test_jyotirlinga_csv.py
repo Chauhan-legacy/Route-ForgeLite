@@ -1,0 +1,51 @@
+import csv
+import io
+import pytest
+from backend import csv_handler, optimizer
+
+SAMPLE_JYOTIRLINGA_CSV = """Stop_No,Jyotirlinga_Name,Temple_Name,City_Town,District,State,Latitude,Longitude,Significance
+1,Somnath,Shri Somnath Jyotirlinga Temple,"Prabhas Patan, Veraval",Gir Somnath,Gujarat,20.888,70.4012,"First among the 12 Jyotirlingas, situated on the western coast."
+2,Nageshwar,Nageshvara Jyotirlinga Temple,Dwarka,Devbhoomi Dwarka,Gujarat,22.4707,69.0773,"Symbolizes protection from poison and evil, near coastal Dwarka."
+3,Mahakaleshwar,Shri Mahakaleshwar Temple,Ujjain,Ujjain,Madhya Pradesh,23.1828,75.7682,"Only south-facing (Dakshinamukhi) Jyotirlinga, Lord of Time."
+4,Omkareshwar,Shri Omkareshwar Temple,Mandhata Island,Khandwa,Madhya Pradesh,22.2475,76.1517,Located on an island shaped like the sacred Om on the Narmada River.
+5,Bhimashankar,Shri Bhimashankar Temple,Bhimashankar,Pune,Maharashtra,19.0739,73.5351,"Source of the Bhima River, nestled in the Sahyadri Hills."
+6,Trimbakeshwar,Shri Trimbakeshwar Temple,Trimbak,Nashik,Maharashtra,19.9333,73.5333,Source of the Godavari River; three-faced lingam representing Trimurti.
+7,Grishneshwar,Shri Grishneshwar Temple,Verul,Chhatrapati Sambhajinagar (Aurangabad),Maharashtra,20.0232,75.1764,"Last of the 12 Jyotirlingas, located near the UNESCO Ellora Caves."
+8,Mallikarjuna,Shri Mallikarjuna Swamy Temple,Srisailam,Nandyal,Andhra Pradesh,16.0743,78.8682,Set in Nallamala Hills; both a Jyotirlinga and a Shakti Peetha.
+9,Ramanathaswamy,Ramanathaswamy Temple (Rameshwaram),Rameswaram,Ramanathapuram,Tamil Nadu,9.2881,79.3129,"Southernmost Jyotirlinga, established by Lord Rama before crossing to Lanka."
+10,Kashi Vishwanath,Shri Kashi Vishwanath Temple,Varanasi,Varanasi,Uttar Pradesh,25.3113,83.0104,Located in the holy city of Varanasi on the banks of the Ganges.
+11,Vaidyanath,Vaidyanath Temple (Baidyanath Dham),Deoghar,Deoghar,Jharkhand,24.4826,86.7013,Known as the wish-fulfilling Kamna Linga and healing shrine.
+12,Kedarnath,Shri Kedarnath Temple,Kedarnath,Rudraprayag,Uttarakhand,30.7352,79.0669,Highest altitude Jyotirlinga in the Garhwal Himalayas; open May–October."""
+
+def test_jyotirlinga_csv_parsing():
+    ok, stops, warnings, err = csv_handler.parse_csv_stops(SAMPLE_JYOTIRLINGA_CSV)
+    assert ok is True
+    assert len(stops) == 12
+    # Verify coordinates and names were preserved
+    first = stops[0]
+    assert "Somnath" in first["name"]
+    assert first.get("latitude") == 20.888
+    assert first.get("longitude") == 70.4012
+    assert "Prabhas Patan" in first["address"]
+
+def test_jyotirlinga_optimization():
+    r = csv.DictReader(io.StringIO(SAMPLE_JYOTIRLINGA_CSV))
+    raw = list(r)
+
+    stops = []
+    for i, s in enumerate(raw):
+        stops.append({
+            "stopId": f"stop_{i+1}",
+            "name": s["Jyotirlinga_Name"],
+            "address": f"{s['Temple_Name']}, {s['City_Town']}, {s['State']}",
+            "latitude": float(s["Latitude"]),
+            "longitude": float(s["Longitude"]),
+            "sequence": i,
+            "metadata": {}
+        })
+
+    opts = {"fixedStart": True, "fixedEnd": False, "returnToStart": False}
+    res = optimizer.optimize_stops(stops, opts)
+    assert res["optimizedDistanceMeters"] > 0
+    assert len(res["stops"]) == 12
+    assert res["savingsPercent"] > 0

@@ -46,6 +46,7 @@ export const Map: React.FC<MapProps> = ({
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const isLoadedRef = useRef<boolean>(false);
   const hasFittedInitialBoundsRef = useRef<boolean>(false);
+  const prevStopsCountRef = useRef<number>(stops.length);
   const isPinpointModeRef = useRef<boolean>(!!isPinpointMode);
 
   useEffect(() => {
@@ -353,6 +354,16 @@ export const Map: React.FC<MapProps> = ({
       const bounds = new maplibregl.LngLatBounds();
       validStops.forEach(s => bounds.extend([s.resolvedLng, s.resolvedLat]));
       map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 600 });
+    }
+
+    // Auto-fit camera if bulk waypoints imported or route cleared/replaced
+    if (Math.abs(stops.length - prevStopsCountRef.current) > 1 && validStops.length > 0) {
+      prevStopsCountRef.current = stops.length;
+      const bounds = new maplibregl.LngLatBounds();
+      validStops.forEach(s => bounds.extend([s.resolvedLng, s.resolvedLat]));
+      map.fitBounds(bounds, { padding: 70, maxZoom: 15, duration: 800 });
+    } else {
+      prevStopsCountRef.current = stops.length;
     }
   }, [stops, routeGeometry, onSelectStop, onStopMove]);
 

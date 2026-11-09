@@ -487,37 +487,64 @@ export const App: React.FC = () => {
   };
 
   // Bulk Import
-  const handleBulkImport = async (newStopsData: Array<{ name: string; address: string; lat?: number; lng?: number; locked?: boolean }>) => {
+  const handleBulkImport = async (
+    newStopsData: Array<{ name: string; address: string; lat?: number; lng?: number; locked?: boolean }>,
+    replaceExisting = false
+  ) => {
     if (!currentRoute) return;
     setIsSaving(true);
     setSyncStatus('syncing');
 
     try {
       let currentRev = revision;
-      const addedStops: Stop[] = [];
 
-      for (const item of newStopsData) {
-        const res = await api.addStop(currentRoute.routeId, currentRev, item.address, item.name);
-        currentRev = res.revision;
-
-        if (item.lat != null && item.lng != null) {
-          const updRes = await api.updateStop(currentRoute.routeId, currentRev, res.stop.stopId, {
-            latitude: item.lat,
-            longitude: item.lng,
-            metadata: { ...res.stop.metadata, locked: !!item.locked }
-          });
-          currentRev = updRes.revision;
-          addedStops.push(updRes.stop);
-        } else {
-          addedStops.push(res.stop);
+      // Cleanly replace old stops if requested
+      if (replaceExisting && stops.length > 0) {
+        for (const s of stops) {
+          try {
+            const delRes = await api.removeStop(currentRoute.routeId, currentRev, s.stopId);
+            currentRev = delRes.revision;
+          } catch (e) {
+            console.warn('Remove stop error during replace:', e);
+          }
         }
       }
 
-      const allStops = [...stops, ...addedStops];
+      const addedStops: Stop[] = [];
+
+      for (const item of newStopsData) {
+        // Direct coordinates passed to avoid any geocoding lag or external failures
+        const res = await api.addStop(
+          currentRoute.routeId,
+          currentRev,
+          item.address,
+          item.name,
+          item.lat ?? null,
+          item.lng ?? null,
+          {
+            locked: !!item.locked,
+            precision: (item.lat != null && item.lng != null) ? 'sub-meter' : 'approximated',
+            source: 'csv_import'
+          }
+        );
+        currentRev = res.revision;
+        addedStops.push(res.stop);
+      }
+
+      const allStops = replaceExisting ? addedStops : [...stops, ...addedStops];
       setStops(allStops);
       setRevision(currentRev);
       setSyncStatus('connected');
-      showToast(`Loaded ${newStopsData.length} waypoints`, 'success');
+      showToast(`Loaded ${newStopsData.length} waypoints successfully`, 'success');
+
+      // Center map on the first imported waypoint with valid coordinates
+      const firstWithCoords = addedStops.find(s => (s.lat ?? s.latitude) != null && (s.lng ?? s.longitude) != null);
+      if (firstWithCoords) {
+        const cLat = (firstWithCoords.lat ?? firstWithCoords.latitude)!;
+        const cLng = (firstWithCoords.lng ?? firstWithCoords.longitude)!;
+        setMapCenter({ lat: cLat, lng: cLng });
+      }
+
       await updateRouteCalculation(allStops, summary.mode, currentRoute.routeId);
     } catch (err: any) {
       showToast(`Import error: ${err.message}`, 'warning');
@@ -849,6 +876,7 @@ export const App: React.FC = () => {
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImportStops={handleBulkImport}
+        existingStopCount={stops.length}
       />
 
       <OptimizationModal
