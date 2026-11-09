@@ -30,7 +30,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
   const scenarios = {
     urban: {
       title: 'Urban Express Delivery',
-      subtitle: 'San Francisco Downtown Corridor',
+      subtitle: 'San Francisco Downtown Corridor (Sample Route)',
       originalKm: '28.5',
       optimizedKm: '14.2',
       savingsPercent: '50.2%',
@@ -38,11 +38,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
       fuelSaved: '1.2 L',
       co2Saved: '2.8 kg',
       stops: ['1 Ferry Building', '333 Post St (Union Sq)', '1070 Lombard St', 'Golden Gate Bridge'],
-      circuit: 'Open-Ended Tour (Fixed Origin)'
+      circuit: 'Open-Ended Tour (Fixed Origin) • Sample Route'
     },
     corridor: {
       title: 'Regional Supply Corridor',
-      subtitle: 'Airport Hub to Presidio Terminal',
+      subtitle: 'Airport Hub to Presidio Terminal (Sample Route)',
       originalKm: '64.8',
       optimizedKm: '41.3',
       savingsPercent: '36.3%',
@@ -50,11 +50,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
       fuelSaved: '2.0 L',
       co2Saved: '4.6 kg',
       stops: ['SFO Cargo Hub', 'Mission Depot', 'Financial District', 'Presidio Distribution'],
-      circuit: 'Fixed Origin & Destination'
+      circuit: 'Fixed Origin & Destination • Sample Route'
     },
     roundtrip: {
       title: 'Closed-Loop Inspection',
-      subtitle: 'Pier 39 Sunset Return Loop',
+      subtitle: 'Pier 39 Sunset Return Loop (Sample Route)',
       originalKm: '39.4',
       optimizedKm: '19.1',
       savingsPercent: '51.5%',
@@ -62,7 +62,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
       fuelSaved: '1.7 L',
       co2Saved: '4.0 kg',
       stops: ['Depot Alpha (Pier 39)', 'Sunset Retail Hub', 'Twin Peaks Inspection', 'Depot Alpha (Pier 39)'],
-      circuit: 'Full Roundtrip Circuit'
+      circuit: 'Full Roundtrip Circuit • Sample Route'
     }
   };
 
@@ -202,7 +202,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
               <Sparkles className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
               <span className="font-mono text-[10px] uppercase tracking-wider text-editorial-subtle">Algorithmic Precision</span>
               <span className="text-[#DDD7CC]">&bull;</span>
-              <span className="font-medium text-editorial-ink">Google OR-Tools + OpenFreeMap</span>
+              <span className="font-medium text-editorial-ink">2-Opt (Web) / OR-Tools (Local) &bull; OpenFreeMap</span>
             </div>
 
             {/* Headline matching ProNature Editorial Style */}
@@ -245,7 +245,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
             <div className="grid grid-cols-3 gap-4 mt-12 pt-8 border-t border-[#EAE6DD] w-full max-w-lg">
               <div>
                 <span className="block text-[10px] font-mono uppercase tracking-wider text-editorial-subtle">Engine</span>
-                <span className="font-serif text-sm sm:text-base font-semibold text-editorial-ink mt-0.5 block">OR-Tools GLS</span>
+                <span className="font-serif text-sm sm:text-base font-semibold text-editorial-ink mt-0.5 block">2-Opt / OR-Tools</span>
               </div>
               <div>
                 <span className="block text-[10px] font-mono uppercase tracking-wider text-editorial-subtle">Cartography</span>
@@ -346,10 +346,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-[90%] bg-[#FAF8F5]/95 border border-[#D8D2C6] shadow-card rounded-xl p-3 backdrop-blur-md flex items-center justify-between">
                   <div>
                     <span className="block text-[9px] font-mono uppercase tracking-wider text-editorial-subtle">
-                      Distance Reduction
+                      Sample Route Savings
                     </span>
                     <span className="font-serif text-sm font-semibold text-editorial-ink">
-                      28.5 km &rarr; 14.2 km
+                      28.5 km &rarr; 14.2 km (Sample)
                     </span>
                   </div>
                   <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-[11px] font-bold">
@@ -389,9 +389,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
             {/* Editorial Body Description */}
             <p className="font-sans text-sm sm:text-base text-editorial-body leading-relaxed max-w-2xl mx-auto">
               We engineered RouteForge for dispatchers, couriers, and field engineers who refuse to accept
-              proprietary map quotas, billing lockouts, or cartoonish interfaces. By pairing open vector cartography
-              with Google OR-Tools Guided Local Search, RouteForge delivers industrial-grade route optimization
-              instantly in your browser or local desktop — 100% free forever.
+              proprietary map quotas, billing lockouts, or cartoonish interfaces. Pairing open vector cartography
+              with an in-browser 2-Opt solver (for instant web dispatch) and Google OR-Tools Guided Local Search
+              (for local desktop backend mode), RouteForge delivers industrial-grade route optimization
+              instantly — 100% free forever.
             </p>
 
             {/* Three Value Pillars with Editorial Numbers (01, 02, 03) */}
@@ -406,9 +407,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
 
               <div className="flex flex-col gap-2">
                 <span className="font-serif italic text-2xl text-editorial-subtle/60">02</span>
-                <h3 className="font-serif text-lg font-medium text-editorial-ink">OR-Tools Optimization</h3>
+                <h3 className="font-serif text-lg font-medium text-editorial-ink">Dual-Engine Solvers</h3>
                 <p className="text-xs text-editorial-subtle leading-relaxed">
-                  Industrial Traveling Salesperson solver with unweighted dummy sink formulation for open-ended tours, fixed origin/destinations, and locked stops.
+                  In-browser 2-Opt spatial heuristic for standalone web deployment, plus Google OR-Tools Guided Local Search with dummy sinks when running with the local Python backend.
                 </p>
               </div>
 
@@ -433,10 +434,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
                   PROVEN PERFORMANCE
                 </span>
                 <h2 className="font-serif italic text-3xl sm:text-4xl text-editorial-ink mt-2">
-                  Live Optimization Benchmarks
+                  Optimization Benchmarks (Sample Routes)
                 </h2>
                 <p className="text-xs sm:text-sm text-editorial-subtle mt-1 max-w-md">
-                  Compare real-world route reduction across common logistics profiles.
+                  Compare route reduction across common logistics profiles (Sample demonstration values).
                 </p>
               </div>
 
@@ -539,7 +540,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
               {/* Waypoint Deck Split */}
               <div className="p-6 bg-[#FAF8F5]">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-editorial-subtle block mb-3">
-                  Optimal Stop Sequence Generated by Google OR-Tools:
+                  Optimal Stop Sequence (Sample Route — 2-Opt / OR-Tools):
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   {currentScenario.stops.map((stop, idx) => (
@@ -595,10 +596,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
                   <Cpu className="w-4 h-4" />
                 </div>
                 <h4 className="font-serif text-lg font-medium text-editorial-ink">
-                  OR-Tools Guided Search
+                  2-Opt & OR-Tools Solvers
                 </h4>
                 <p className="text-xs text-editorial-subtle leading-relaxed">
-                  Solves open-ended TSPs via unweighted dummy sink nodes, honoring fixed start/destination requirements and locked intermediate stops.
+                  In-browser 2-Opt spatial heuristic for zero-install web planning, or Google OR-Tools Guided Local Search with dummy sinks in local backend mode.
                 </p>
               </div>
 
@@ -685,7 +686,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
                 <span className="font-serif italic text-3xl text-editorial-ink/20">02</span>
                 <h4 className="font-serif text-lg font-medium text-editorial-ink">Execute Optimization</h4>
                 <p className="text-xs text-editorial-subtle leading-relaxed">
-                  Click "Optimize Tour" with one click. Google OR-Tools evaluates road distance matrices to unwind loops and eliminate deadhead miles.
+                  Click "Optimize Tour" with one click. In-browser 2-Opt (or Google OR-Tools in local backend mode) evaluates distance matrices to eliminate deadhead miles.
                 </p>
               </div>
 
@@ -744,7 +745,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
           </div>
 
           <div className="text-[10px] font-mono text-editorial-subtle">
-            MIT License &bull; Free Open Data &bull; Python FastAPI & OR-Tools
+            MIT License &bull; Free Open Data &bull; In-Browser 2-Opt & Python OR-Tools
           </div>
         </footer>
 

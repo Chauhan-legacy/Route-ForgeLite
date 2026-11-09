@@ -279,7 +279,7 @@ export const StopList: React.FC<StopListProps> = ({
                   ? 'bg-editorial-subsurface hover:bg-editorial-muted text-editorial-body border border-editorial-border cursor-pointer'
                   : 'bg-editorial-ink hover:bg-black text-editorial-bg cursor-pointer shadow-md'
               }`}
-              title={stops.length < 3 ? `Add ${3 - stops.length} more waypoint(s) to optimize tour` : 'Optimize tour sequence now (1-click OR-Tools)'}
+              title={stops.length < 3 ? `Add ${3 - stops.length} more waypoint(s) to optimize tour` : 'Optimize tour sequence now (1-click)'}
             >
               <Zap className={`w-3.5 h-3.5 flex-shrink-0 ${stops.length < 3 ? 'text-amber-600' : 'text-amber-400'}`} />
               <span className="font-semibold truncate">

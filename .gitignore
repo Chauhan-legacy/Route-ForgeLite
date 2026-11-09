@@ -20,6 +20,8 @@ database/*.pid
 
 # Environment & Credentials
 .env
+.env.*
+!.env.example
 .env.local
 .clasp.json
 
