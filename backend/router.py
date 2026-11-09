@@ -108,6 +108,45 @@ async def _fetch_osrm_single_leg(
     except Exception:
         pass
 
+    # Secondary mirror fallback
+    if "openstreetmap.de" not in base_url:
+        sec_url = f"https://routing.openstreetmap.de/routed-car/route/v1/driving/{float(p1['longitude']):.6f},{float(p1['latitude']):.6f};{float(p2['longitude']):.6f},{float(p2['latitude']):.6f}?overview=simplified&geometries=geojson&steps=true"
+        try:
+            resp = await client.get(sec_url, headers=headers, timeout=6.0)
+            if resp.status_code == 200:
+                d = resp.json()
+                if d.get("code") == "Ok" and d.get("routes"):
+                    r = d["routes"][0]
+                    coords = r.get("geometry", {}).get("coordinates", [])
+                    maneuvers = []
+                    for leg in r.get("legs", []):
+                        for step in leg.get("steps", []):
+                            m = step.get("maneuver", {})
+                            street_name = step.get("name", "")
+                            m_type = m.get("type", "turn")
+                            m_modifier = m.get("modifier", "")
+                            instruction = f"{m_type.capitalize()} {m_modifier} onto {street_name}".strip() if street_name else f"{m_type.capitalize()} {m_modifier}".strip() or "Continue"
+                            maneuvers.append({
+                                "instruction": instruction,
+                                "streetName": street_name,
+                                "distanceMeters": round(step.get("distance", 0)),
+                                "durationSeconds": round(step.get("duration", 0)),
+                                "type": m_type,
+                                "modifier": m_modifier,
+                                "legIndex": leg_idx
+                            })
+
+                    if len(coords) >= 2:
+                        return {
+                            "ok": True,
+                            "coordinates": coords,
+                            "distance": r.get("distance", 0.0),
+                            "duration": r.get("duration", 0.0),
+                            "maneuvers": maneuvers
+                        }
+        except Exception:
+            pass
+
     d = haversine_distance(float(p1["latitude"]), float(p1["longitude"]), float(p2["latitude"]), float(p2["longitude"]))
     speed = MODE_SPEEDS_MPS.get(mode, 13.88)
     return {

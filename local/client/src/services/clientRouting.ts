@@ -278,11 +278,14 @@ async function fetchSingleRoadLeg(
   baseUrl: string,
   modeSpeed: number
 ): Promise<{ ok: boolean; coordinates: [number, number][]; distance: number; duration: number }> {
-  const url = `${baseUrl}/${p1.lng.toFixed(5)},${p1.lat.toFixed(5)};${p2.lng.toFixed(5)},${p2.lat.toFixed(5)}?overview=simplified&geometries=geojson`;
+  const coordQuery = `${p1.lng.toFixed(5)},${p1.lat.toFixed(5)};${p2.lng.toFixed(5)},${p2.lat.toFixed(5)}?overview=simplified&geometries=geojson`;
+  const primaryUrl = `${baseUrl}/${coordQuery}`;
+
+  // 1. Try Primary OSRM Endpoint
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6500);
-    const resp = await fetch(url, { signal: controller.signal });
+    const resp = await fetch(primaryUrl, { signal: controller.signal });
     clearTimeout(timeout);
     if (resp.ok) {
       const data = await resp.json();
@@ -300,10 +303,38 @@ async function fetchSingleRoadLeg(
       }
     }
   } catch {
-    // Non-blocking fallback for this individual leg
+    // Non-blocking fallback to secondary mirror
   }
 
-  // Graceful straight-line fallback for this individual leg if no road network exists (e.g. off-grid mountain pass)
+  // 2. Try Secondary Mirror (routing.openstreetmap.de) if primary timed out or was rate-limited
+  const secondaryBase = 'https://routing.openstreetmap.de/routed-car/route/v1/driving';
+  if (!baseUrl.includes('openstreetmap.de')) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5500);
+      const resp = await fetch(`${secondaryBase}/${coordQuery}`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+          const r = data.routes[0];
+          const coords = r.geometry?.coordinates as [number, number][];
+          if (coords && coords.length >= 2) {
+            return {
+              ok: true,
+              coordinates: coords,
+              distance: r.distance,
+              duration: r.duration
+            };
+          }
+        }
+      }
+    } catch {
+      // Continue to geodesic fallback
+    }
+  }
+
+  // 3. Graceful fallback only if both global road graph servers fail
   const d = haversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
   return {
     ok: false,

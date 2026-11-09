@@ -283,7 +283,7 @@ export const StopList: React.FC<StopListProps> = ({
             >
               <Zap className={`w-3.5 h-3.5 flex-shrink-0 ${stops.length < 3 ? 'text-amber-600' : 'text-amber-400'}`} />
               <span className="font-semibold truncate">
-                {stops.length < 3 ? `Optimize (${stops.length}/3 Stops)` : 'Optimize Tour'}
+                {stops.length < 3 ? `Optimize (${stops.length}/3)` : 'Optimize Tour'}
               </span>
               {stops.length >= 3 && (
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/20 text-white font-bold ml-1">
