@@ -356,8 +356,21 @@ def api_delete_route(req: GetRouteRequest):
     success = database.delete_route(req.routeId)
     return {"ok": True, "data": {"deleted": success}}
 
-# Frontend Static Files (Supports both compiled React bundle and vanilla frontend)
+# Frontend Static Files (Supports compiled React bundle with MapLibre worker and SPA routing)
 DIST_DIR = Path(__file__).parent.parent / "local" / "client" / "dist"
+MAPLIBRE_NODE_WORKER = Path(__file__).parent.parent / "local" / "client" / "node_modules" / "maplibre-gl" / "dist" / "maplibre-gl-worker.mjs"
+
+@app.get("/assets/maplibre-gl-worker.mjs")
+def serve_maplibre_worker():
+    dist_worker = DIST_DIR / "assets" / "maplibre-gl-worker.mjs"
+    if dist_worker.exists():
+        return FileResponse(str(dist_worker), media_type="application/javascript")
+    if MAPLIBRE_NODE_WORKER.exists():
+        return FileResponse(str(MAPLIBRE_NODE_WORKER), media_type="application/javascript")
+    raise HTTPException(status_code=404, detail="MapLibre worker not found")
+
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
 
 if DIST_DIR.exists() and (DIST_DIR / "index.html").exists():
     if (DIST_DIR / "assets").exists():
@@ -371,14 +384,23 @@ if DIST_DIR.exists() and (DIST_DIR / "index.html").exists():
     def serve_dist_route(route_id: str):
         return FileResponse(str(DIST_DIR / "index.html"))
 
-if FRONTEND_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+    @app.get("/{file_name:path}")
+    def serve_dist_file(file_name: str):
+        target = DIST_DIR / file_name
+        if target.is_file():
+            return FileResponse(str(target))
+        return FileResponse(str(DIST_DIR / "index.html"))
 
-    if not (DIST_DIR.exists() and (DIST_DIR / "index.html").exists()):
-        @app.get("/")
-        def serve_index():
-            return FileResponse(str(FRONTEND_DIR / "index.html"))
+elif FRONTEND_DIR.exists():
+    @app.get("/")
+    def serve_index():
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
 
-        @app.get("/route/{route_id}")
-        def serve_route(route_id: str):
-            return FileResponse(str(FRONTEND_DIR / "index.html"))
+    @app.get("/route/{route_id}")
+    def serve_route(route_id: str):
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
+        return FileResponse(str(FRONTEND_DIR / "index.html"))
+
+    @app.get("/route/{route_id}")
+    def serve_route(route_id: str):
+        return FileResponse(str(FRONTEND_DIR / "index.html"))

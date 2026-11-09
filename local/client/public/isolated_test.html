@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MapLibre GL + OpenFreeMap Isolated Verification (Ahmedabad)</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+    #map { width: 100%; height: 100%; }
+    #status-card {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 14px 18px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      max-width: 360px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 11px;
+      margin-bottom: 6px;
+    }
+    .badge-success { background: #DCFCE7; color: #166534; }
+    .badge-info { background: #E0F2FE; color: #0369A1; }
+    .badge-error { background: #FEE2E2; color: #991B1B; }
+    .log-item { margin: 3px 0; color: #334155; }
+    .log-item strong { color: #0F172A; }
+  </style>
+</head>
+<body>
+  <div id="status-card">
+    <div id="badge-container"><span class="badge badge-info">Initializing Map...</span></div>
+    <div class="log-item"><strong>Location:</strong> Ahmedabad, India (23.0225° N, 72.5714° E)</div>
+    <div class="log-item"><strong>Style:</strong> OpenFreeMap Positron (Vector)</div>
+    <div class="log-item"><strong>Worker:</strong> <span id="worker-status">Loading...</span></div>
+    <div class="log-item"><strong>Tiles Loaded:</strong> <span id="tile-count">0</span></div>
+    <div class="log-item"><strong>Status:</strong> <span id="status-text">Starting MapLibre GL...</span></div>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+    const statusText = document.getElementById('status-text');
+    const workerStatus = document.getElementById('worker-status');
+    const tileCount = document.getElementById('tile-count');
+    const badgeContainer = document.getElementById('badge-container');
+
+    let loadedTiles = 0;
+
+    try {
+      // 1. Verify Worker Configuration
+      const workerUrl = '/assets/maplibre-gl-worker.mjs';
+      maplibregl.setWorkerUrl(workerUrl);
+      workerStatus.innerText = 'Configured (' + workerUrl + ')';
+
+      // 2. Initialize Map at Ahmedabad
+      const map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://tiles.openfreemap.org/styles/positron',
+        center: [72.5714, 23.0225],
+        zoom: 12
+      });
+
+      // Add navigation controls
+      map.addControl(new maplibregl.NavigationControl({ showCompass: true }), 'bottom-right');
+
+      // Add marker at Sabarmati Ashram / central Ahmedabad
+      new maplibregl.Marker({ color: '#047857' })
+        .setLngLat([72.5714, 23.0225])
+        .setPopup(new maplibregl.Popup().setHTML('<strong>Ahmedabad, Gujarat</strong><br>Center: 23.0225, 72.5714'))
+        .addTo(map);
+
+      map.on('style.load', () => {
+        statusText.innerText = 'Style JSON loaded. Requesting vector tiles...';
+      });
+
+      map.on('data', (e) => {
+        if (e.dataType === 'source' && e.isSourceLoaded) {
+          loadedTiles++;
+          tileCount.innerText = loadedTiles + ' tile sources synced';
+        }
+      });
+
+      map.on('load', () => {
+        badgeContainer.innerHTML = '<span class="badge badge-success">Map Loaded &amp; Rendered</span>';
+        statusText.innerText = 'All vector layers, roads, and geographical features rendered.';
+        workerStatus.innerText = 'Active (200 OK)';
+      });
+
+      map.on('error', (e) => {
+        console.error('MapLibre error:', e);
+        badgeContainer.innerHTML = '<span class="badge badge-error">Map Error</span>';
+        statusText.innerText = 'Error: ' + (e.error?.message || e.message || 'Unknown');
+      });
+
+    } catch (err) {
+      console.error('Fatal initialization error:', err);
+      badgeContainer.innerHTML = '<span class="badge badge-error">Fatal Error</span>';
+      statusText.innerText = err.message;
+    }
+  </script>
+</body>
+</html>

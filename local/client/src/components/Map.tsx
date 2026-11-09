@@ -146,6 +146,13 @@ export const Map: React.FC<MapProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
+    // Explicitly set official worker URL to guarantee worker resolution in all environments
+    try {
+      maplibregl.setWorkerUrl('/assets/maplibre-gl-worker.mjs');
+    } catch (e) {
+      console.warn('Could not set MapLibre workerUrl:', e);
+    }
+
     const initialStyle = OPENFREEMAP_STYLES[activeStyleKey].url;
 
     const map = new maplibregl.Map({
@@ -161,12 +168,21 @@ export const Map: React.FC<MapProps> = ({
 
     map.on('load', () => {
       isLoadedRef.current = true;
+      map.resize();
       renderRouteLayers();
     });
 
     map.on('style.load', () => {
       renderRouteLayers();
     });
+
+    map.on('error', (e) => {
+      console.warn('MapLibre GL Notice:', e.error?.message || e);
+    });
+
+    // Handle window resize
+    const handleResize = () => map.resize();
+    window.addEventListener('resize', handleResize);
 
     // Map click handler for adding waypoints
     map.on('click', (e) => {
@@ -178,6 +194,7 @@ export const Map: React.FC<MapProps> = ({
     mapInstanceRef.current = map;
 
     return () => {
+      window.removeEventListener('resize', handleResize);
       markersRef.current.forEach(m => m.remove());
       markersRef.current = [];
       map.remove();

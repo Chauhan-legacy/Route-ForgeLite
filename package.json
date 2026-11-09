@@ -1,29 +1,22 @@
 {
   "name": "routeforge",
-  "version": "1.0.0",
-  "description": "RouteForge: Dual-Target Collaborative Multi-Stop Route Planner",
+  "version": "2.0.0",
+  "description": "RouteForge: High-Performance Multi-Stop Route Optimizer",
   "private": true,
   "scripts": {
-    "test": "node tests/shared.test.js && node tests/server.test.js && node tests/e2e.test.js",
-    "test:shared": "node tests/shared.test.js",
-    "test:server": "node tests/server.test.js",
-    "test:e2e": "node tests/e2e.test.js",
-    "dev": "npm --prefix local run dev",
-    "server": "npm --prefix local run server",
-    "client": "npm --prefix local run client",
-    "build": "npm --prefix local run build",
-    "start": "npm --prefix local run start"
+    "build": "npm --prefix local/client run build",
+    "dev": "npm --prefix local/client run dev",
+    "start": "start_routeforge.bat",
+    "test": "pytest tests -v"
   },
   "keywords": [
     "route-planner",
-    "apps-script",
-    "leaflet",
+    "tsp-optimizer",
+    "maplibre",
+    "openfreemap",
     "osrm",
-    "2-opt",
-    "nearest-neighbor",
-    "collaborative"
+    "ortools"
   ],
   "author": "RouteForge Team",
   "license": "MIT"
 }
-

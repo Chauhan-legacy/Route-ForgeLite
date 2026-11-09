@@ -143,11 +143,10 @@
       map = L.map('map', { zoomControl: false }).setView([48.2082, 16.3738], 12);
       L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-      // CartoDB Voyager Pastel Tiles (Luxury Modern Aesthetic)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      // Clean OpenStreetMap Tiles (100% Free, Zero API Keys, No Watermarks)
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd',
-        attribution: '© OpenStreetMap, © CARTO'
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
 
       markersLayer = L.featureGroup().addTo(map);
