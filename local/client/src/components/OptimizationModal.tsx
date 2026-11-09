@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Zap, RefreshCw, Compass, ArrowRight, ShieldCheck, Check } from 'lucide-react';
+import { X, Zap, Check, ShieldCheck } from 'lucide-react';
 import { OptimizationOptions } from '../types';
 
 interface OptimizationModalProps {
@@ -41,94 +41,89 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-aerospace-950/80 backdrop-blur-md">
-      <div className="w-full max-w-lg bg-aerospace-900 border border-cyan-500/25 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="w-full max-w-lg bg-editorial-surface border border-editorial-border rounded-2xl shadow-float flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-cyan-500/15 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              <Zap className="w-4 h-4 fill-current" />
-            </div>
-            <div>
-              <h3 className="font-sans font-bold text-sm text-white">TSP Route Optimization</h3>
-              <p className="text-[11px] text-slate-400">Google OR-Tools GLS & 2-Opt Spatial Partitioning</p>
-            </div>
+        <div className="px-6 py-4 border-b border-editorial-border flex items-center justify-between">
+          <div>
+            <h3 className="font-serif text-lg font-medium text-editorial-ink">Tour Optimization</h3>
+            <p className="text-[11px] text-editorial-subtle">Google OR-Tools Guided Local Search and 2-opt spatial heuristics</p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-aerospace-850 hover:bg-aerospace-800 text-slate-400 hover:text-white flex items-center justify-center transition-all"
+            className="w-8 h-8 rounded-lg text-editorial-subtle hover:text-editorial-ink hover:bg-editorial-subsurface flex items-center justify-center transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-4">
           {/* Objective Selection */}
           <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-2">
+            <label className="text-xs font-medium text-editorial-body block mb-2">
               Optimization Objective
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setObjective('distance')}
-                className={`p-3 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-colors ${
                   objective === 'distance'
-                    ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-glow-cyan/20'
-                    : 'bg-aerospace-850/60 border-cyan-500/15 text-slate-400 hover:text-slate-200'
+                    ? 'bg-editorial-subsurface border-editorial-ink text-editorial-ink'
+                    : 'bg-editorial-surface border-editorial-border text-editorial-body hover:bg-editorial-subsurface'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-white">Shortest Distance</span>
-                  {objective === 'distance' && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                  <span className="font-medium text-xs text-editorial-ink">Shortest Distance</span>
+                  {objective === 'distance' && <Check className="w-3.5 h-3.5 text-editorial-ink" />}
                 </div>
-                <p className="text-[11px] text-slate-400">Minimizes total road kilometers across stops</p>
+                <p className="text-[11px] text-editorial-subtle">Minimizes total road kilometers across stops</p>
               </button>
 
               <button
                 type="button"
                 onClick={() => setObjective('duration')}
-                className={`p-3 rounded-2xl border text-left transition-all ${
+                className={`p-3 rounded-xl border text-left transition-colors ${
                   objective === 'duration'
-                    ? 'bg-cyan-500/15 border-cyan-400 text-white shadow-glow-cyan/20'
-                    : 'bg-aerospace-850/60 border-cyan-500/15 text-slate-400 hover:text-slate-200'
+                    ? 'bg-editorial-subsurface border-editorial-ink text-editorial-ink'
+                    : 'bg-editorial-surface border-editorial-border text-editorial-body hover:bg-editorial-subsurface'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-white">Fastest Time</span>
-                  {objective === 'duration' && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                  <span className="font-medium text-xs text-editorial-ink">Fastest Time</span>
+                  {objective === 'duration' && <Check className="w-3.5 h-3.5 text-editorial-ink" />}
                 </div>
-                <p className="text-[11px] text-slate-400">Optimizes for highest speed corridor segments</p>
+                <p className="text-[11px] text-editorial-subtle">Prioritizes faster road segments and corridors</p>
               </button>
             </div>
           </div>
 
           {/* Sequence Invariants & Circuit Constraints */}
-          <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-300 block">
-              Tour Structure & Constraints
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-editorial-body block">
+              Tour Structure
             </label>
 
             {/* Fix Start */}
-            <label className="flex items-center justify-between p-3 rounded-2xl bg-aerospace-850/60 border border-cyan-500/15 cursor-pointer hover:bg-aerospace-850 transition-colors">
+            <label className="flex items-center justify-between p-3 rounded-xl bg-editorial-subsurface border border-editorial-border cursor-pointer hover:bg-editorial-muted transition-colors">
               <div>
-                <span className="text-xs font-medium text-slate-200 block">Lock First Waypoint</span>
-                <span className="text-[11px] text-slate-400">Departure origin remains fixed at Stop #1</span>
+                <span className="text-xs font-medium text-editorial-ink block">Lock Starting Waypoint</span>
+                <span className="text-[11px] text-editorial-subtle">Origin remains fixed at Stop #1</span>
               </div>
               <input
                 type="checkbox"
                 checked={fixStart}
                 onChange={(e) => setFixStart(e.target.checked)}
-                className="w-4 h-4 rounded text-cyan-500 accent-cyan-400"
+                className="w-4 h-4 rounded text-editorial-ink accent-editorial-ink"
               />
             </label>
 
             {/* Return to Start (Roundtrip) */}
-            <label className="flex items-center justify-between p-3 rounded-2xl bg-aerospace-850/60 border border-cyan-500/15 cursor-pointer hover:bg-aerospace-850 transition-colors">
+            <label className="flex items-center justify-between p-3 rounded-xl bg-editorial-subsurface border border-editorial-border cursor-pointer hover:bg-editorial-muted transition-colors">
               <div>
-                <span className="text-xs font-medium text-slate-200 block">Roundtrip (Return to Start)</span>
-                <span className="text-[11px] text-slate-400">Creates a closed circuit ending where you started</span>
+                <span className="text-xs font-medium text-editorial-ink block">Roundtrip (Closed Circuit)</span>
+                <span className="text-[11px] text-editorial-subtle">Returns to the starting point after final stop</span>
               </div>
               <input
                 type="checkbox"
@@ -137,51 +132,51 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
                   setReturnToStart(e.target.checked);
                   if (e.target.checked) setFixEnd(false);
                 }}
-                className="w-4 h-4 rounded text-cyan-500 accent-cyan-400"
+                className="w-4 h-4 rounded text-editorial-ink accent-editorial-ink"
               />
             </label>
 
             {/* Fix End */}
             {!returnToStart && (
-              <label className="flex items-center justify-between p-3 rounded-2xl bg-aerospace-850/60 border border-cyan-500/15 cursor-pointer hover:bg-aerospace-850 transition-colors">
+              <label className="flex items-center justify-between p-3 rounded-xl bg-editorial-subsurface border border-editorial-border cursor-pointer hover:bg-editorial-muted transition-colors">
                 <div>
-                  <span className="text-xs font-medium text-slate-200 block">Lock Final Waypoint</span>
-                  <span className="text-[11px] text-slate-400">Keep current last stop as fixed destination</span>
+                  <span className="text-xs font-medium text-editorial-ink block">Lock Destination Waypoint</span>
+                  <span className="text-[11px] text-editorial-subtle">Final stop remains fixed as end destination</span>
                 </div>
                 <input
                   type="checkbox"
                   checked={fixEnd}
                   onChange={(e) => setFixEnd(e.target.checked)}
-                  className="w-4 h-4 rounded text-cyan-500 accent-cyan-400"
+                  className="w-4 h-4 rounded text-editorial-ink accent-editorial-ink"
                 />
               </label>
             )}
           </div>
 
-          {/* Locked Invariant Notice */}
-          <div className="p-3 rounded-xl bg-aerospace-950 border border-cyan-500/20 text-[11px] text-slate-400 flex items-start gap-2.5">
-            <ShieldCheck className="w-4 h-4 text-cyan-400 flex-shrink-0 mt-0.5" />
+          {/* Invariant & Heuristic Notice */}
+          <div className="p-3 rounded-xl bg-editorial-subsurface border border-editorial-border text-[11px] text-editorial-subtle flex items-start gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-editorial-body flex-shrink-0 mt-0.5" />
             <div>
-              <span className="text-slate-200 font-semibold">Invariant Protection:</span> {lockedCount} locked stops (🔒) will strictly retain their fixed sequence. The Traveling Salesperson Problem (TSP) is NP-hard; solutions are optimal heuristic approximations.
+              <span className="text-editorial-ink font-medium">Invariant Guarantee:</span> {lockedCount > 0 ? `${lockedCount} locked stops will strictly retain their positions.` : 'Locked stops maintain strict sequence order.'} The Traveling Salesperson Problem (TSP) is NP-hard; solutions are optimal heuristic approximations.
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-cyan-500/15 flex items-center justify-end gap-3 bg-aerospace-950/40">
+        <div className="px-6 py-3.5 border-t border-editorial-border flex items-center justify-end gap-2 bg-editorial-subsurface">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+            className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-editorial-subtle hover:text-editorial-ink"
           >
             Cancel
           </button>
           <button
             onClick={handleRun}
             disabled={isOptimizing || stopCount < 3}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-aerospace-950 font-bold text-xs shadow-glow-cyan transition-all disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-editorial-ink hover:bg-editorial-accent-hover text-editorial-bg text-xs font-medium transition-colors disabled:opacity-40"
           >
-            <Zap className="w-3.5 h-3.5 fill-current" />
-            <span>{isOptimizing ? 'Calculating Heuristics...' : `Optimize ${stopCount} Waypoints`}</span>
+            <Zap className="w-3.5 h-3.5" />
+            <span>{isOptimizing ? 'Optimizing...' : `Optimize ${stopCount} Waypoints`}</span>
           </button>
         </div>
       </div>
@@ -189,3 +184,4 @@ export const OptimizationModal: React.FC<OptimizationModalProps> = ({
   );
 };
 
+export default OptimizationModal;

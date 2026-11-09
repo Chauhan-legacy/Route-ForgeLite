@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Stop } from '../types';
-import { Maximize2, Minimize2, Crosshair } from 'lucide-react';
+import { Maximize2, Minimize2, Crosshair, Layers } from 'lucide-react';
 
 interface MapProps {
   stops: Stop[];
@@ -12,20 +12,20 @@ interface MapProps {
 }
 
 const TILE_LAYERS = {
-  dark: {
-    name: 'CartoDB Dark',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  },
   voyager: {
-    name: 'CartoDB Voyager',
+    name: 'Voyager',
     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   },
-  osm: {
-    name: 'OpenStreetMap',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  positron: {
+    name: 'Positron',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  },
+  dark: {
+    name: 'Dark Matter',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }
 };
 
@@ -41,7 +41,7 @@ export const Map: React.FC<MapProps> = ({
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const currentTileLayerRef = useRef<L.TileLayer | null>(null);
 
-  const [activeTileKey, setActiveTileKey] = useState<keyof typeof TILE_LAYERS>('dark');
+  const [activeTileKey, setActiveTileKey] = useState<keyof typeof TILE_LAYERS>('voyager');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Initialize Map
@@ -124,68 +124,64 @@ export const Map: React.FC<MapProps> = ({
       const isLast = idx === validStops.length - 1 && validStops.length > 1;
       const isLocked = !!stop.metadata?.locked;
 
-      let bgColor = 'background: linear-gradient(135deg, #00f2fe 0%, #2563eb 100%);';
-      let border = 'border: 2px solid #ffffff;';
-      let boxShadow = 'box-shadow: 0 0 14px rgba(0, 242, 254, 0.6);';
+      let bgColor = '#18181B';
+      let textColor = '#FAF8F5';
+      let border = '2px solid #FFFFFF';
 
       if (isFirst) {
-        bgColor = 'background: linear-gradient(135deg, #10b981 0%, #059669 100%);';
-        boxShadow = 'box-shadow: 0 0 14px rgba(16, 185, 129, 0.6);';
+        bgColor = '#047857'; // Refined Emerald
       } else if (isLast) {
-        bgColor = 'background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);';
-        boxShadow = 'box-shadow: 0 0 14px rgba(139, 92, 246, 0.6);';
+        bgColor = '#1D4ED8'; // Refined Royal Blue
       }
 
       if (isLocked) {
-        border = 'border: 2px solid #f59e0b;';
-        boxShadow = 'box-shadow: 0 0 14px rgba(245, 158, 11, 0.7);';
+        bgColor = '#B45309'; // Refined Amber
+        border = '2px solid #FEF3C7';
       }
 
       const html = `
         <div style="
-          position: relative;
-          width: 30px;
-          height: 30px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
-          ${bgColor}
-          ${border}
-          ${boxShadow}
+          background: ${bgColor};
+          color: ${textColor};
+          border: ${border};
+          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
           display: flex;
           align-items: center;
           justify-content: center;
-          color: white;
           font-family: 'JetBrains Mono', monospace, sans-serif;
           font-size: 11px;
-          font-weight: 700;
+          font-weight: 600;
           cursor: pointer;
         ">
           ${idx + 1}
-          ${isLocked ? '<span style="position: absolute; top: -5px; right: -5px; font-size: 10px;">🔒</span>' : ''}
         </div>
       `;
 
       const customIcon = L.divIcon({
-        className: 'rf-custom-marker',
+        className: 'rf-clean-marker',
         html,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
       });
 
       const marker = L.marker([stop.resolvedLat, stop.resolvedLng], { icon: customIcon });
 
       marker.bindPopup(`
-        <div style="font-family: system-ui, sans-serif; min-width: 160px; color: #1e293b;">
-          <div style="font-weight: 700; font-size: 13px; margin-bottom: 2px;">
-            #${idx + 1}: ${stop.name}
+        <div style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; min-width: 170px; color: #18181B; padding: 2px;">
+          <div style="font-weight: 600; font-size: 13px; margin-bottom: 2px;">
+            Stop ${idx + 1}: ${stop.name}
           </div>
-          <div style="font-size: 11px; color: #64748b; margin-bottom: 6px;">
+          <div style="font-size: 11px; color: #71717A; margin-bottom: 6px;">
             ${stop.address}
           </div>
-          <div style="display: flex; gap: 4px; font-size: 10px;">
-            <span style="background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-family: monospace;">
+          <div style="display: flex; gap: 4px; font-size: 10px; align-items: center;">
+            <span style="background: #F4F1EA; color: #27272A; padding: 2px 6px; border-radius: 4px; font-family: monospace;">
               ${stop.resolvedLat.toFixed(4)}, ${stop.resolvedLng.toFixed(4)}
             </span>
-            ${isLocked ? '<span style="background: #fef3c7; color: #b45309; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Locked 🔒</span>' : ''}
+            ${isLocked ? '<span style="background: #FEF3C7; color: #92400E; padding: 2px 6px; border-radius: 4px; font-weight: 500;">Fixed Invariant</span>' : ''}
           </div>
         </div>
       `);
@@ -197,7 +193,6 @@ export const Map: React.FC<MapProps> = ({
       markersGroup.addLayer(marker);
     });
 
-    // Auto-fit if stops exist and no geometry
     if (validStops.length > 0 && !routeGeometry) {
       const bounds = L.latLngBounds(validStops.map(s => [s.resolvedLat, s.resolvedLng]));
       map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
@@ -214,14 +209,11 @@ export const Map: React.FC<MapProps> = ({
 
     if (!routeGeometry) return;
 
-    // Normalize coordinates to [lat, lng]
     let coords: [number, number][] = [];
     if (Array.isArray(routeGeometry)) {
       if (routeGeometry.length > 0 && Array.isArray(routeGeometry[0])) {
-        // If coordinate values are [lon, lat] (GeoJSON standard) where lon is between -180..180
         coords = routeGeometry.map((pt: any) => {
           if (Array.isArray(pt) && pt.length >= 2) {
-            // Assume [lon, lat] if from GeoJSON
             return [pt[1], pt[0]] as [number, number];
           }
           return [0, 0] as [number, number];
@@ -232,29 +224,17 @@ export const Map: React.FC<MapProps> = ({
     }
 
     if (coords.length > 1) {
-      // Outer glow underlayer
-      const glowPolyline = L.polyline(coords, {
-        color: '#00f2fe',
-        weight: 7,
-        opacity: 0.4,
+      // Clean, refined navy polyline
+      const pathLine = L.polyline(coords, {
+        color: '#1E293B',
+        weight: 4,
+        opacity: 0.85,
         lineCap: 'round',
         lineJoin: 'round'
       });
 
-      // Sharp core line
-      const corePolyline = L.polyline(coords, {
-        color: '#2563eb',
-        weight: 3.5,
-        opacity: 0.95,
-        lineCap: 'round',
-        lineJoin: 'round'
-      });
-
-      routeGroup.addLayer(glowPolyline);
-      routeGroup.addLayer(corePolyline);
-
-      // Fit map to polyline
-      map.fitBounds(corePolyline.getBounds(), { padding: [50, 50], maxZoom: 16 });
+      routeGroup.addLayer(pathLine);
+      map.fitBounds(pathLine.getBounds(), { padding: [50, 50], maxZoom: 16 });
     }
   }, [routeGeometry]);
 
@@ -283,21 +263,21 @@ export const Map: React.FC<MapProps> = ({
   };
 
   return (
-    <div className={`relative w-full h-full bg-aerospace-950 overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+    <div className={`relative w-full h-full bg-[#F4F1EA] overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       <div ref={mapContainerRef} className="w-full h-full" />
 
-      {/* Floating Map Action Controls */}
+      {/* Floating Action Controls */}
       <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
         {/* Layer Switcher */}
-        <div className="flex items-center p-1 rounded-xl bg-aerospace-900/90 backdrop-blur-md border border-cyan-500/20 shadow-aerospace">
+        <div className="flex items-center p-0.5 rounded-xl bg-white border border-editorial-border shadow-card">
           {(Object.keys(TILE_LAYERS) as Array<keyof typeof TILE_LAYERS>).map((k) => (
             <button
               key={k}
               onClick={() => setActiveTileKey(k)}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-all ${
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-colors ${
                 activeTileKey === k
-                  ? 'bg-cyan-500 text-aerospace-950 font-bold shadow-glow-cyan/50'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-editorial-ink text-white font-medium shadow-sm'
+                  : 'text-editorial-body hover:text-editorial-ink'
               }`}
             >
               {k}
@@ -305,33 +285,34 @@ export const Map: React.FC<MapProps> = ({
           ))}
         </div>
 
-        {/* Fit Bounds Button */}
+        {/* Fit Bounds */}
         <button
           onClick={fitBoundsToAll}
-          className="w-8 h-8 rounded-xl bg-aerospace-900/90 backdrop-blur-md border border-cyan-500/20 text-cyan-400 hover:text-cyan-300 flex items-center justify-center shadow-aerospace transition-all"
-          title="Center and fit all waypoints"
+          className="w-8 h-8 rounded-xl bg-white border border-editorial-border text-editorial-body hover:text-editorial-ink flex items-center justify-center shadow-card transition-colors"
+          title="Center route"
         >
           <Crosshair className="w-4 h-4" />
         </button>
 
-        {/* Fullscreen Toggle */}
+        {/* Fullscreen */}
         <button
           onClick={toggleFullscreen}
-          className="w-8 h-8 rounded-xl bg-aerospace-900/90 backdrop-blur-md border border-cyan-500/20 text-cyan-400 hover:text-cyan-300 flex items-center justify-center shadow-aerospace transition-all"
-          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Map'}
+          className="w-8 h-8 rounded-xl bg-white border border-editorial-border text-editorial-body hover:text-editorial-ink flex items-center justify-center shadow-card transition-colors"
+          title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
         >
           {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
       </div>
 
-      {/* Bottom info pill */}
-      <div className="absolute bottom-4 left-4 z-[400] hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-aerospace-900/85 backdrop-blur-md border border-cyan-500/15 text-[11px] text-slate-400 shadow-aerospace pointer-events-none">
-        <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-        <span>Leaflet + CartoDB Road Tiles</span>
-        <span className="text-slate-600">|</span>
-        <span>Click map to inspect coordinates</span>
+      {/* Subtle attribution pill */}
+      <div className="absolute bottom-4 left-4 z-[400] hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm border border-editorial-border text-[11px] text-editorial-subtle shadow-card pointer-events-none">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+        <span>CartoDB Basemap</span>
+        <span className="text-editorial-border">|</span>
+        <span>Click map to place waypoint</span>
       </div>
     </div>
   );
 };
+
 export default Map;

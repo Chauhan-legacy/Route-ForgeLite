@@ -44,176 +44,175 @@ export const StopList: React.FC<StopListProps> = ({
   };
 
   return (
-    <div className="w-full lg:w-[440px] flex flex-col bg-aerospace-900 border-r border-cyan-500/15 h-full overflow-hidden flex-shrink-0">
+    <div className="w-full lg:w-[420px] flex flex-col bg-editorial-surface border-r border-editorial-border h-full overflow-hidden flex-shrink-0">
       {/* Search & Add Input Box */}
-      <div className="p-4 border-b border-cyan-500/15 bg-aerospace-900/60 backdrop-blur-md flex flex-col gap-3">
+      <div className="p-4 border-b border-editorial-border bg-editorial-surface flex flex-col gap-3">
         <form onSubmit={handleSubmit} className="relative flex items-center">
-          <MapPin className="absolute left-3 w-4 h-4 text-cyan-400" />
+          <MapPin className="absolute left-3.5 w-4 h-4 text-editorial-subtle" />
           <input
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
-            placeholder="Add street address, city, or waypoint..."
-            className="w-full h-11 pl-9 pr-12 rounded-xl bg-aerospace-950 border border-cyan-500/25 focus:border-cyan-400 text-xs text-white placeholder-slate-500 outline-none transition-all shadow-inner"
+            placeholder="Add address, landmark, or coordinates..."
+            className="w-full h-10 pl-10 pr-20 rounded-xl bg-editorial-subsurface border border-editorial-border focus:border-editorial-ink text-xs text-editorial-ink placeholder-editorial-subtle outline-none transition-colors shadow-subtle"
             disabled={isSaving || isAdding}
           />
           <button
             type="submit"
             disabled={!inputVal.trim() || isSaving || isAdding}
-            className="absolute right-1.5 w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-aerospace-950 flex items-center justify-center transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-glow-cyan"
-            title="Add Waypoint"
+            className="absolute right-1.5 h-7 px-3 rounded-lg bg-editorial-ink hover:bg-editorial-accent-hover text-editorial-bg text-xs font-medium flex items-center justify-center transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
+            Add
           </button>
         </form>
 
-        {/* Quick Actions Ribbon */}
+        {/* Quick Actions Row */}
         <div className="flex items-center gap-2">
           <button
             onClick={onOptimize}
             disabled={stops.length < 3 || isSaving}
-            className="flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-aerospace-950 font-bold text-xs shadow-glow-cyan transition-all disabled:opacity-35"
+            className="flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-xl bg-editorial-ink hover:bg-editorial-accent-hover text-editorial-bg font-medium text-xs transition-colors disabled:opacity-40"
           >
-            <Zap className="w-3.5 h-3.5 fill-current" />
+            <Zap className="w-3.5 h-3.5" />
             <span>Optimize Tour</span>
           </button>
 
           <button
             onClick={onOpenImport}
-            className="flex items-center gap-1 h-8 px-3 rounded-lg bg-aerospace-850 hover:bg-aerospace-800 border border-cyan-500/20 text-xs font-semibold text-cyan-300 transition-all"
-            title="Import CSV or paste addresses"
+            className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-xs font-medium text-editorial-body transition-colors shadow-subtle"
+            title="Import addresses or CSV"
           >
-            <UploadCloud className="w-3.5 h-3.5" />
+            <UploadCloud className="w-3.5 h-3.5 text-editorial-subtle" />
             <span>Import</span>
           </button>
 
           <button
             onClick={onReverse}
             disabled={stops.length < 2 || isSaving}
-            className="w-8 h-8 rounded-lg bg-aerospace-850 hover:bg-aerospace-800 border border-cyan-500/20 text-slate-300 flex items-center justify-center transition-all disabled:opacity-35"
+            className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors disabled:opacity-40 shadow-subtle"
             title="Reverse Route Sequence"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3.5 h-3.5 text-editorial-subtle" />
           </button>
         </div>
       </div>
 
-      {/* Stops List */}
+      {/* Stops Sequence Deck */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {stops.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center mb-3">
-              <MapPin className="w-6 h-6 text-cyan-400" />
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-editorial-subtle">
+            <div className="w-10 h-10 rounded-full bg-editorial-subsurface border border-editorial-border flex items-center justify-center mb-2.5">
+              <MapPin className="w-4 h-4 text-editorial-subtle" />
             </div>
-            <h4 className="font-sans font-bold text-sm text-slate-200">No stops scheduled</h4>
-            <p className="text-xs text-slate-400 mt-1 max-w-[240px]">
-              Type a location above or click Import to upload 500+ stops via CSV.
+            <h4 className="font-serif text-base font-medium text-editorial-ink">No waypoints added</h4>
+            <p className="text-xs text-editorial-subtle mt-1 max-w-[220px]">
+              Type a location above or click Import to load stops from CSV or sample tours.
             </p>
           </div>
         ) : (
           stops.map((stop, idx) => {
             const isFirst = idx === 0;
-            const isLast = idx === stops.length - 1;
+            const isLast = idx === stops.length - 1 && stops.length > 1;
             const isLocked = !!stop.metadata?.locked;
             const geoStatus = stop.metadata?.geocodeStatus || 'ok';
 
             return (
               <div
                 key={stop.stopId}
-                className={`p-2.5 rounded-xl border transition-all flex items-center gap-2.5 ${
+                className={`p-3 rounded-xl border transition-colors flex items-center gap-3 ${
                   isLocked
-                    ? 'bg-amber-950/20 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
-                    : 'bg-aerospace-850/70 hover:bg-aerospace-800/80 border-cyan-500/15 hover:border-cyan-400/30'
+                    ? 'bg-amber-50/60 border-amber-300'
+                    : 'bg-editorial-surface hover:bg-editorial-subsurface border-editorial-border shadow-subtle'
                 }`}
               >
-                {/* Number Badge */}
+                {/* Sequence Badge */}
                 <div
-                  className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-bold flex-shrink-0 ${
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-medium flex-shrink-0 ${
                     isFirst
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      ? 'bg-editorial-ink text-editorial-bg'
                       : isLast
-                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                      ? 'bg-editorial-ink text-editorial-bg'
                       : isLocked
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/30'
+                      ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                      : 'bg-editorial-subsurface text-editorial-ink border border-editorial-border'
                   }`}
                 >
                   {String(idx + 1).padStart(2, '0')}
                 </div>
 
-                {/* Details */}
+                {/* Stop Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-sans font-semibold text-xs text-white truncate">{stop.name}</span>
+                    <span className="font-medium text-xs text-editorial-ink truncate">{stop.name}</span>
                     {isFirst && (
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">
+                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-editorial-muted text-editorial-ink">
                         Start
                       </span>
                     )}
-                    {isLast && stops.length > 1 && (
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300">
+                    {isLast && (
+                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-editorial-muted text-editorial-ink">
                         End
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400 truncate mt-0.5">{stop.address}</p>
+                  <p className="text-[11px] text-editorial-subtle truncate mt-0.5">{stop.address}</p>
 
                   {geoStatus === 'ambiguous' && (
-                    <span className="text-[9px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                      Ambiguous location
+                    <span className="text-[9px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                      Ambiguous match
                     </span>
                   )}
                   {geoStatus === 'error' && (
-                    <span className="text-[9px] text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
-                      Geocoding failed
+                    <span className="text-[9px] text-rose-800 bg-rose-100 px-1.5 py-0.5 rounded">
+                      Geocode unavailable
                     </span>
                   )}
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1">
+                {/* Action Buttons */}
+                <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => onToggleLock(stop.stopId)}
-                    className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
-                      isLocked ? 'text-amber-400 bg-amber-500/20' : 'text-slate-400 hover:text-slate-200'
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                      isLocked ? 'text-amber-800 bg-amber-200/80' : 'text-editorial-subtle hover:text-editorial-ink hover:bg-editorial-muted'
                     }`}
-                    title={isLocked ? 'Unlock stop (allow 2-opt reordering)' : 'Lock stop in place (invariant)'}
+                    title={isLocked ? 'Unlock waypoint' : 'Lock waypoint in place'}
                   >
                     {isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                   </button>
 
                   <button
                     onClick={() => onEditStop(stop.stopId)}
-                    className="w-6 h-6 rounded text-slate-400 hover:text-cyan-300 flex items-center justify-center"
+                    className="w-7 h-7 rounded-lg text-editorial-subtle hover:text-editorial-ink hover:bg-editorial-muted flex items-center justify-center"
                     title="Edit address"
                   >
-                    <Edit3 className="w-3 h-3" />
+                    <Edit3 className="w-3.5 h-3.5" />
                   </button>
 
                   <button
                     onClick={() => onMoveStop(idx, -1)}
                     disabled={idx === 0}
-                    className="w-6 h-6 rounded text-slate-400 hover:text-slate-200 disabled:opacity-20 flex items-center justify-center"
+                    className="w-7 h-7 rounded-lg text-editorial-subtle hover:text-editorial-ink hover:bg-editorial-muted disabled:opacity-20 flex items-center justify-center"
                     title="Move up"
                   >
-                    <ArrowUp className="w-3 h-3" />
+                    <ArrowUp className="w-3.5 h-3.5" />
                   </button>
 
                   <button
                     onClick={() => onMoveStop(idx, 1)}
                     disabled={idx === stops.length - 1}
-                    className="w-6 h-6 rounded text-slate-400 hover:text-slate-200 disabled:opacity-20 flex items-center justify-center"
+                    className="w-7 h-7 rounded-lg text-editorial-subtle hover:text-editorial-ink hover:bg-editorial-muted disabled:opacity-20 flex items-center justify-center"
                     title="Move down"
                   >
-                    <ArrowDown className="w-3 h-3" />
+                    <ArrowDown className="w-3.5 h-3.5" />
                   </button>
 
                   <button
                     onClick={() => onDeleteStop(stop.stopId)}
-                    className="w-6 h-6 rounded text-slate-500 hover:text-rose-400 flex items-center justify-center"
-                    title="Remove stop"
+                    className="w-7 h-7 rounded-lg text-editorial-subtle hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center"
+                    title="Remove waypoint"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -225,3 +224,4 @@ export const StopList: React.FC<StopListProps> = ({
   );
 };
 
+export default StopList;

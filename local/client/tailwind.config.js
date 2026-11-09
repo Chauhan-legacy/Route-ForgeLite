@@ -7,35 +7,31 @@ export default {
   theme: {
     extend: {
       colors: {
-        aerospace: {
-          950: '#040711',
-          900: '#080d1e',
-          850: '#0d142e',
-          800: '#131e42',
-          750: '#1a2856',
-          700: '#223572',
-          600: '#2d4594',
-        },
-        cyan: {
-          glow: '#00f2fe',
-          neon: '#4facfe',
-        },
-        blue: {
-          electric: '#2563eb',
-          subtle: '#1e3a8a',
+        editorial: {
+          bg: '#FBF9F5',
+          surface: '#FFFFFF',
+          subsurface: '#F6F4EE',
+          muted: '#F0ECE4',
+          border: '#E7E4DB',
+          'border-strong': '#D2CEC4',
+          ink: '#16191D',
+          body: '#2D3139',
+          subtle: '#6B7280',
+          accent: '#111827',
+          'accent-hover': '#1F2937',
         }
       },
       fontFamily: {
+        serif: ['"Newsreader"', 'Georgia', 'serif'],
         sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],
       },
       boxShadow: {
-        'aerospace': '0 8px 32px 0 rgba(0, 240, 255, 0.08), 0 0 0 1px rgba(0, 240, 255, 0.12)',
-        'glow-cyan': '0 0 20px rgba(0, 242, 254, 0.35)',
-        'glow-blue': '0 0 20px rgba(56, 189, 248, 0.25)',
+        'subtle': '0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)',
+        'card': '0 4px 16px 0 rgba(0, 0, 0, 0.03), 0 1px 2px 0 rgba(0, 0, 0, 0.02)',
+        'float': '0 12px 32px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04)',
       }
     },
   },
   plugins: [],
 }
-

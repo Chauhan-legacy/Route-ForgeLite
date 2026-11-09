@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { RouteData, Stop, RouteSummary, TransportMode, OptimizationOptions, OptimizationResult } from './types';
 import * as api from './services/api';
 import { clientGeocodeAddress, TRAFFIC_DISCLAIMER } from './services/clientRouting';
@@ -40,7 +40,7 @@ export const App: React.FC = () => {
     setToast({ message, type });
     setTimeout(() => {
       setToast(current => (current && current.message === message ? null : current));
-    }, 4500);
+    }, 4000);
   }, []);
 
   // Recalculate route polyline & metrics whenever stops or transport mode changes
@@ -96,23 +96,22 @@ export const App: React.FC = () => {
         if (routeId) {
           routeRes = await api.getRoute(routeId);
         } else {
-          const created = await api.createRoute('Mission Alpha — San Francisco');
+          const created = await api.createRoute('San Francisco Delivery Corridor');
           routeId = created.routeId;
-          
-          // Seed initial stops
+
           const seedStops = [
             { name: 'Ferry Building', address: '1 Ferry Building, San Francisco, CA' },
             { name: 'Union Square', address: '333 Post St, San Francisco, CA' },
             { name: 'Lombard Street', address: '1070 Lombard St, San Francisco, CA' },
             { name: 'Golden Gate Bridge', address: 'Golden Gate Bridge, San Francisco, CA' }
           ];
-          
+
           let currentRev = created.revision;
           for (const s of seedStops) {
             const addRes = await api.addStop(routeId, currentRev, s.address, s.name);
             currentRev = addRes.revision;
           }
-          
+
           routeRes = await api.getRoute(routeId);
         }
 
@@ -152,7 +151,7 @@ export const App: React.FC = () => {
       setStops(updatedStops);
       setRevision(res.revision);
       setSyncStatus('connected');
-      showToast(`Added waypoint: ${res.stop.name}`, 'success');
+      showToast(`Added: ${res.stop.name}`, 'success');
 
       await updateRouteCalculation(updatedStops, summary.mode, currentRoute.routeId);
     } catch (err: any) {
@@ -186,7 +185,7 @@ export const App: React.FC = () => {
         metadata: { ...targetStop.metadata, locked: newLocked }
       });
       setRevision(res.revision);
-      showToast(newLocked ? 'Waypoint locked in sequence (🔒 invariant)' : 'Waypoint unlocked', 'info');
+      showToast(newLocked ? 'Waypoint fixed in sequence' : 'Waypoint unlocked', 'info');
     } catch (err: any) {
       console.warn('Persist lock error:', err);
     }
@@ -255,7 +254,7 @@ export const App: React.FC = () => {
       const updatedStops = stops.map(s => s.stopId === stopId ? res.stop : s);
       setStops(updatedStops);
 
-      showToast(`Updated to: ${newName}`, 'success');
+      showToast(`Updated: ${newName}`, 'success');
       await updateRouteCalculation(updatedStops, summary.mode, currentRoute!.routeId);
     } catch (err: any) {
       showToast(`Update error: ${err.message}`, 'warning');
@@ -274,7 +273,7 @@ export const App: React.FC = () => {
       const res = await api.reorderStops(currentRoute.routeId, revision, reversed.map(s => s.stopId));
       setRevision(res.revision);
       await updateRouteCalculation(reversed, summary.mode, currentRoute.routeId);
-      showToast('Route sequence reversed', 'info');
+      showToast('Sequence reversed', 'info');
     } catch (err: any) {
       console.warn('Reverse error:', err);
     }
@@ -293,7 +292,7 @@ export const App: React.FC = () => {
       setOptimizationResult(res);
       setSyncStatus('connected');
       showToast(
-        `Optimized with ${res.method}! Distance saved: ${res.savingsPercent}%`,
+        `Optimized with ${res.method}. Distance saved: ${res.savingsPercent}%`,
         'success'
       );
       await updateRouteCalculation(res.stops, summary.mode, currentRoute.routeId);
@@ -318,7 +317,7 @@ export const App: React.FC = () => {
       for (const item of newStopsData) {
         const res = await api.addStop(currentRoute.routeId, currentRev, item.address, item.name);
         currentRev = res.revision;
-        
+
         if (item.lat != null && item.lng != null) {
           const updRes = await api.updateStop(currentRoute.routeId, currentRev, res.stop.stopId, {
             latitude: item.lat,
@@ -336,7 +335,7 @@ export const App: React.FC = () => {
       setStops(allStops);
       setRevision(currentRev);
       setSyncStatus('connected');
-      showToast(`Imported ${newStopsData.length} waypoints successfully!`, 'success');
+      showToast(`Loaded ${newStopsData.length} waypoints`, 'success');
       await updateRouteCalculation(allStops, summary.mode, currentRoute.routeId);
     } catch (err: any) {
       showToast(`Import error: ${err.message}`, 'warning');
@@ -366,7 +365,7 @@ export const App: React.FC = () => {
 
   // Create New Route
   const handleNewRoute = async () => {
-    const title = window.prompt('Enter new route name:', 'New Multi-Stop Mission');
+    const title = window.prompt('Enter route name:', 'New Corridor');
     if (!title) return;
 
     try {
@@ -390,13 +389,13 @@ export const App: React.FC = () => {
   // Export Route
   const handleExport = (format: 'csv' | 'json') => {
     if (stops.length === 0) {
-      showToast('No stops to export.', 'warning');
+      showToast('No waypoints to export.', 'warning');
       return;
     }
 
     if (format === 'csv') {
       const rows = [
-        ['Stop Order', 'Name', 'Address', 'Latitude', 'Longitude', 'Locked'],
+        ['Stop Order', 'Name', 'Address', 'Latitude', 'Longitude', 'Fixed Invariant'],
         ...stops.map((s, idx) => [
           idx + 1,
           `"${(s.name || '').replace(/"/g, '""')}"`,
@@ -410,7 +409,7 @@ export const App: React.FC = () => {
       const encodedUri = encodeURI(csvContent);
       const link = document.createElement('a');
       link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `${currentRoute?.title || 'route'}-export.csv`);
+      link.setAttribute('download', `${currentRoute?.title || 'route'}-stops.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -435,25 +434,25 @@ export const App: React.FC = () => {
   const handleShare = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(window.location.href);
-      showToast('Route URL copied to clipboard!', 'success');
+      showToast('Route link copied to clipboard', 'success');
     }
   };
 
   const lockedCount = stops.filter(s => s.metadata?.locked).length;
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-aerospace-950 text-white font-sans overflow-hidden select-none">
-      {/* Toast Banner */}
+    <div className="flex flex-col h-screen w-screen bg-editorial-bg text-editorial-ink font-sans overflow-hidden">
+      {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[2000] flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-aerospace-900/95 backdrop-blur-xl border border-cyan-400/40 shadow-glow-cyan text-xs text-white animate-in slide-in-from-top-4 duration-200">
-          {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-          {toast.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />}
-          {toast.type === 'info' && <Info className="w-4 h-4 text-cyan-400 flex-shrink-0" />}
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[2000] flex items-center gap-2 px-4 py-2.5 rounded-full bg-editorial-surface border border-editorial-border shadow-float text-xs text-editorial-ink animate-in slide-in-from-top-3 duration-150">
+          {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />}
+          {toast.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />}
+          {toast.type === 'info' && <Info className="w-4 h-4 text-editorial-subtle flex-shrink-0" />}
           <span className="font-medium">{toast.message}</span>
         </div>
       )}
 
-      {/* Top Navigation */}
+      {/* Top Header */}
       <Header
         currentRoute={currentRoute}
         syncStatus={syncStatus}
@@ -463,7 +462,7 @@ export const App: React.FC = () => {
         onNewRoute={handleNewRoute}
       />
 
-      {/* Modular Metrics Deck */}
+      {/* Metrics Bar */}
       <MetricsBar
         summary={summary}
         optimizationResult={optimizationResult}
@@ -472,9 +471,9 @@ export const App: React.FC = () => {
         onModeChange={handleModeChange}
       />
 
-      {/* Main Workspace */}
+      {/* Main Workspace Split */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
-        {/* Left Column: Sequence Deck */}
+        {/* Left Column: Stops Sequence Deck */}
         <div className={`h-full flex flex-col ${activeMobileTab === 'stops' ? 'flex' : 'hidden lg:flex'}`}>
           <StopList
             stops={stops}
@@ -496,7 +495,7 @@ export const App: React.FC = () => {
             stops={stops}
             routeGeometry={routeGeometry}
             onMapClick={async (lat, lng) => {
-              const confirmAdd = window.confirm(`Add waypoint at coordinate: ${lat.toFixed(4)}, ${lng.toFixed(4)}?`);
+              const confirmAdd = window.confirm(`Place waypoint at: ${lat.toFixed(4)}, ${lng.toFixed(4)}?`);
               if (confirmAdd && currentRoute) {
                 const res = await api.addStop(currentRoute.routeId, revision, `${lat.toFixed(4)}, ${lng.toFixed(4)}`, `Waypoint ${stops.length + 1}`);
                 const updRes = await api.updateStop(currentRoute.routeId, res.revision, res.stop.stopId, {
@@ -507,20 +506,20 @@ export const App: React.FC = () => {
                 setStops(newStops);
                 setRevision(updRes.revision);
                 updateRouteCalculation(newStops, summary.mode, currentRoute.routeId);
-                showToast('Waypoint added from map click', 'success');
+                showToast('Waypoint added from map', 'success');
               }
             }}
           />
         </div>
 
-        {/* Mobile View Toggle Bar */}
-        <div className="lg:hidden absolute bottom-5 left-1/2 -translate-x-1/2 z-[500] flex items-center p-1 rounded-full bg-aerospace-900/90 backdrop-blur-md border border-cyan-500/30 shadow-aerospace">
+        {/* Mobile View Toggle */}
+        <div className="lg:hidden absolute bottom-5 left-1/2 -translate-x-1/2 z-[500] flex items-center p-1 rounded-full bg-editorial-surface border border-editorial-border shadow-float">
           <button
             onClick={() => setActiveMobileTab('map')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
               activeMobileTab === 'map'
-                ? 'bg-cyan-500 text-aerospace-950 font-bold shadow-glow-cyan'
-                : 'text-slate-400'
+                ? 'bg-editorial-ink text-editorial-bg shadow-sm'
+                : 'text-editorial-body'
             }`}
           >
             <MapIcon className="w-3.5 h-3.5" />
@@ -528,10 +527,10 @@ export const App: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveMobileTab('stops')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
               activeMobileTab === 'stops'
-                ? 'bg-cyan-500 text-aerospace-950 font-bold shadow-glow-cyan'
-                : 'text-slate-400'
+                ? 'bg-editorial-ink text-editorial-bg shadow-sm'
+                : 'text-editorial-body'
             }`}
           >
             <ListOrdered className="w-3.5 h-3.5" />
@@ -540,14 +539,13 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Import Modal */}
+      {/* Modals */}
       <ImportModal
         isOpen={isImportOpen}
         onClose={() => setIsImportOpen(false)}
         onImportStops={handleBulkImport}
       />
 
-      {/* Optimization Modal */}
       <OptimizationModal
         isOpen={isOptimizeOpen}
         onClose={() => setIsOptimizeOpen(false)}
