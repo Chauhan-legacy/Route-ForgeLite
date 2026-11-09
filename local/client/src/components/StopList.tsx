@@ -261,81 +261,94 @@ export const StopList: React.FC<StopListProps> = ({
           </div>
         )}
 
-        {/* Quick Actions Row */}
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              if (onQuickOptimize) {
-                onQuickOptimize();
-              } else {
-                onOptimize();
-              }
-            }}
-            disabled={isSaving}
-            className={`flex-1 flex items-center justify-center gap-1.5 h-8 px-3 rounded-xl font-medium text-xs transition-colors shadow-subtle ${
-              stops.length < 3
-                ? 'bg-editorial-subsurface hover:bg-editorial-muted text-editorial-subtle border border-editorial-border cursor-pointer'
-                : 'bg-editorial-ink hover:bg-editorial-accent-hover text-editorial-bg cursor-pointer'
-            }`}
-            title={stops.length < 3 ? `Add ${3 - stops.length} more waypoint(s) to optimize tour` : 'Optimize tour sequence now (1-click)'}
-          >
-            <Zap className={`w-3.5 h-3.5 ${stops.length < 3 ? 'text-editorial-subtle' : 'text-amber-400'}`} />
-            <span>{stops.length < 3 ? `Optimize (${stops.length}/3 Waypoints)` : 'Optimize Tour'}</span>
-          </button>
-
-          <button
-            onClick={onOptimize}
-            disabled={isSaving}
-            className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors shadow-subtle flex-shrink-0"
-            title="Optimization Constraints & Settings"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-editorial-subtle" />
-          </button>
-
-          <button
-            onClick={onOpenImport}
-            className="flex items-center gap-1.5 h-8 px-2.5 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-xs font-medium text-editorial-body transition-colors shadow-subtle flex-shrink-0"
-            title="Import addresses or CSV"
-          >
-            <UploadCloud className="w-3.5 h-3.5 text-editorial-subtle" />
-            <span className="hidden sm:inline">Import</span>
-          </button>
-
-          {onTogglePinpointMode && (
+        {/* Action Toolbar */}
+        <div className="flex flex-col gap-2">
+          {/* Primary Row: Optimize Tour & Constraints */}
+          <div className="flex items-center gap-2">
             <button
-              type="button"
-              onClick={onTogglePinpointMode}
-              className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl border text-xs font-medium transition-all shadow-subtle flex-shrink-0 ${
-                isPinpointMode
-                  ? 'bg-rose-600 text-white border-rose-700 shadow-sm'
-                  : 'bg-editorial-surface hover:bg-editorial-subsurface border-editorial-border text-editorial-body'
-              }`}
-              title={isPinpointMode ? 'Crosshair active: Click map to place pin' : 'Click to drop pin on map'}
-            >
-              <Target className={`w-3.5 h-3.5 ${isPinpointMode ? 'text-white' : 'text-rose-600'}`} />
-              <span>{isPinpointMode ? 'Drop...' : 'Drop Pin'}</span>
-            </button>
-          )}
-
-          <button
-            onClick={onReverse}
-            disabled={stops.length < 2 || isSaving}
-            className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors disabled:opacity-40 shadow-subtle flex-shrink-0"
-            title="Reverse Route Sequence"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-editorial-subtle" />
-          </button>
-
-          {onClearAll && stops.length > 0 && (
-            <button
-              onClick={onClearAll}
+              onClick={() => {
+                if (onQuickOptimize) {
+                  onQuickOptimize();
+                } else {
+                  onOptimize();
+                }
+              }}
               disabled={isSaving}
-              className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-rose-50 border border-editorial-border hover:border-rose-200 text-editorial-body hover:text-rose-600 flex items-center justify-center transition-colors shadow-subtle flex-shrink-0"
-              title="Clear all waypoints (Start fresh with a clean map)"
+              className={`flex-1 flex items-center justify-center gap-2 h-9 px-4 rounded-xl font-medium text-xs transition-all shadow-subtle whitespace-nowrap ${
+                stops.length < 3
+                  ? 'bg-editorial-subsurface hover:bg-editorial-muted text-editorial-body border border-editorial-border cursor-pointer'
+                  : 'bg-editorial-ink hover:bg-black text-editorial-bg cursor-pointer shadow-md'
+              }`}
+              title={stops.length < 3 ? `Add ${3 - stops.length} more waypoint(s) to optimize tour` : 'Optimize tour sequence now (1-click OR-Tools)'}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <Zap className={`w-3.5 h-3.5 flex-shrink-0 ${stops.length < 3 ? 'text-amber-600' : 'text-amber-400'}`} />
+              <span className="font-semibold truncate">
+                {stops.length < 3 ? `Optimize (${stops.length}/3 Stops)` : 'Optimize Tour'}
+              </span>
+              {stops.length >= 3 && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/20 text-white font-bold ml-1">
+                  1-Click
+                </span>
+              )}
             </button>
-          )}
+
+            <button
+              onClick={onOptimize}
+              disabled={isSaving}
+              className="w-9 h-9 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors shadow-subtle flex-shrink-0"
+              title="Optimization Constraints & Settings"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-editorial-subtle" />
+            </button>
+          </div>
+
+          {/* Secondary Row: Pinpoint, Import, Reverse, Clear */}
+          <div className="flex items-center gap-1.5">
+            {onTogglePinpointMode && (
+              <button
+                type="button"
+                onClick={onTogglePinpointMode}
+                className={`flex-1 flex items-center justify-center gap-1.5 h-8 px-2.5 rounded-xl border text-xs font-medium transition-all shadow-subtle ${
+                  isPinpointMode
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-sm font-semibold'
+                    : 'bg-editorial-surface hover:bg-editorial-subsurface border-editorial-border text-editorial-body'
+                }`}
+                title={isPinpointMode ? 'Crosshair active: Click anywhere on map to drop pin' : 'Click to drop pin on map'}
+              >
+                <Target className={`w-3.5 h-3.5 flex-shrink-0 ${isPinpointMode ? 'text-white animate-spin' : 'text-rose-600'}`} />
+                <span>{isPinpointMode ? 'Click Map...' : 'Drop Pin'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={onOpenImport}
+              className="flex-1 flex items-center justify-center gap-1.5 h-8 px-2.5 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-xs font-medium text-editorial-body transition-colors shadow-subtle"
+              title="Import addresses or CSV"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-editorial-subtle flex-shrink-0" />
+              <span>Import</span>
+            </button>
+
+            <button
+              onClick={onReverse}
+              disabled={stops.length < 2 || isSaving}
+              className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-editorial-subsurface border border-editorial-border text-editorial-body flex items-center justify-center transition-colors disabled:opacity-40 shadow-subtle flex-shrink-0"
+              title="Reverse Route Sequence"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-editorial-subtle" />
+            </button>
+
+            {onClearAll && stops.length > 0 && (
+              <button
+                onClick={onClearAll}
+                disabled={isSaving}
+                className="w-8 h-8 rounded-xl bg-editorial-surface hover:bg-rose-50 border border-editorial-border hover:border-rose-200 text-editorial-body hover:text-rose-600 flex items-center justify-center transition-colors shadow-subtle flex-shrink-0"
+                title="Clear all waypoints (Start fresh with a clean map)"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Native Optimization Before/After Comparison Card */}

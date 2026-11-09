@@ -299,12 +299,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStartPlanning }) => 
 
                   {/* Smooth Optimal Route Polyline */}
                   <path
+                    id="optimalRoutePath"
                     d="M 50 160 C 90 90, 150 170, 220 70 S 260 40, 280 40"
                     stroke="#16191D"
                     strokeWidth="3.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
+
+                  {/* Dynamic Moving Courier Vehicle along the Route (Sliding Object) */}
+                  <circle r="6" fill="#047857" stroke="#FAF8F5" strokeWidth="2" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.3))">
+                    <animateMotion
+                      path="M 50 160 C 90 90, 150 170, 220 70 S 260 40, 280 40"
+                      dur="3.8s"
+                      repeatCount="indefinite"
+                      rotate="auto"
+                    />
+                  </circle>
+                  <circle r="12" fill="#047857" opacity="0.25">
+                    <animateMotion
+                      path="M 50 160 C 90 90, 150 170, 220 70 S 260 40, 280 40"
+                      dur="3.8s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
 
                   {/* Waypoint 1: Ferry Building */}
                   <circle cx="50" cy="160" r="8" fill="#16191D" stroke="#FAF8F5" strokeWidth="2.5" />

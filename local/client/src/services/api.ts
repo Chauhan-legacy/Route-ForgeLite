@@ -6,7 +6,7 @@ import { Stop, RouteData, TransportMode, OptimizationOptions, OptimizationResult
 import { clientOptimizeStops, clientComputeRoute, clientGeocodeAddress } from './clientRouting';
 import { reverseGeocodeCoordinates, searchLocationSuggestions, GeocodeSuggestion } from './geocodingService';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port === '5173' ? 'http://127.0.0.1:8000' : '');
 
 let isBackendAvailable = true;
 let healthCheckDone = false;
