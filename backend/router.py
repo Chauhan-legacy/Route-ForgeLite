@@ -62,12 +62,77 @@ def compute_straight_line(valid_stops: List[Dict[str, Any]], mode: str = "drivin
         }
     }
 
+async def _fetch_osrm_single_leg(
+    client: httpx.AsyncClient,
+    p1: Dict[str, Any],
+    p2: Dict[str, Any],
+    base_url: str,
+    mode: str,
+    leg_idx: int = 0
+) -> Dict[str, Any]:
+    url = f"{base_url}/{float(p1['longitude']):.6f},{float(p1['latitude']):.6f};{float(p2['longitude']):.6f},{float(p2['latitude']):.6f}?overview=simplified&geometries=geojson&steps=true"
+    headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
+    try:
+        resp = await client.get(url, headers=headers, timeout=7.0)
+        if resp.status_code == 200:
+            d = resp.json()
+            if d.get("code") == "Ok" and d.get("routes"):
+                r = d["routes"][0]
+                coords = r.get("geometry", {}).get("coordinates", [])
+                maneuvers = []
+                for leg in r.get("legs", []):
+                    for step in leg.get("steps", []):
+                        m = step.get("maneuver", {})
+                        street_name = step.get("name", "")
+                        m_type = m.get("type", "turn")
+                        m_modifier = m.get("modifier", "")
+                        instruction = f"{m_type.capitalize()} {m_modifier} onto {street_name}".strip() if street_name else f"{m_type.capitalize()} {m_modifier}".strip() or "Continue"
+                        maneuvers.append({
+                            "instruction": instruction,
+                            "streetName": street_name,
+                            "distanceMeters": round(step.get("distance", 0)),
+                            "durationSeconds": round(step.get("duration", 0)),
+                            "type": m_type,
+                            "modifier": m_modifier,
+                            "legIndex": leg_idx
+                        })
+
+                if len(coords) >= 2:
+                    return {
+                        "ok": True,
+                        "coordinates": coords,
+                        "distance": r.get("distance", 0.0),
+                        "duration": r.get("duration", 0.0),
+                        "maneuvers": maneuvers
+                    }
+    except Exception:
+        pass
+
+    d = haversine_distance(float(p1["latitude"]), float(p1["longitude"]), float(p2["latitude"]), float(p2["longitude"]))
+    speed = MODE_SPEEDS_MPS.get(mode, 13.88)
+    return {
+        "ok": False,
+        "coordinates": [[float(p1["longitude"]), float(p1["latitude"])], [float(p2["longitude"]), float(p2["latitude"])]],
+        "distance": d,
+        "duration": d / speed,
+        "maneuvers": [{
+            "instruction": f"Proceed toward destination ({round(d/1000, 1)} km)",
+            "streetName": "",
+            "distanceMeters": round(d),
+            "durationSeconds": round(d / speed),
+            "type": "straight",
+            "modifier": "",
+            "legIndex": leg_idx
+        }]
+    }
+
 async def compute_route(
     stops: List[Dict[str, Any]],
     provider: str = "osrm",
     mode: str = "driving",
     allow_fallback: bool = True
 ) -> Dict[str, Any]:
+    import asyncio
     valid_stops = [
         s for s in stops 
         if s.get("latitude") is not None and s.get("longitude") is not None
@@ -87,57 +152,111 @@ async def compute_route(
     if provider == "straightLine":
         return compute_straight_line(valid_stops, clean_mode)
 
-    # For routes with > 80 stops, OSRM public URL limits can be exceeded; chunk if necessary
-    if len(valid_stops) > 80:
-        return await compute_chunked_osrm(valid_stops, clean_mode, allow_fallback)
-
-    coord_str = ";".join(f"{float(s['longitude']):.6f},{float(s['latitude']):.6f}" for s in valid_stops)
     base_url = OSRM_ENDPOINTS.get(clean_mode, OSRM_ENDPOINTS["driving"])
-    url = f"{base_url}/{coord_str}?overview=full&geometries=geojson&steps=true"
-    headers = {
-        "Accept": "application/json",
-        "User-Agent": USER_AGENT
-    }
 
+    # For 2 to 3 stops, attempt single request
+    if len(valid_stops) <= 3:
+        coord_str = ";".join(f"{float(s['longitude']):.6f},{float(s['latitude']):.6f}" for s in valid_stops)
+        url = f"{base_url}/{coord_str}?overview=simplified&geometries=geojson&steps=true"
+        headers = {"Accept": "application/json", "User-Agent": USER_AGENT}
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    json_data = resp.json()
+                    if json_data.get("code") == "Ok" and json_data.get("routes"):
+                        top = json_data["routes"][0]
+                        maneuvers = []
+                        for leg_idx, leg in enumerate(top.get("legs", [])):
+                            for step in leg.get("steps", []):
+                                m = step.get("maneuver", {})
+                                street_name = step.get("name", "")
+                                m_type = m.get("type", "turn")
+                                m_mod = m.get("modifier", "")
+                                instruction = f"{m_type.capitalize()} {m_mod} onto {street_name}".strip() if street_name else f"{m_type.capitalize()} {m_mod}".strip() or "Continue"
+                                maneuvers.append({
+                                    "instruction": instruction,
+                                    "streetName": street_name,
+                                    "distanceMeters": round(step.get("distance", 0)),
+                                    "durationSeconds": round(step.get("duration", 0)),
+                                    "type": m_type,
+                                    "modifier": m_mod,
+                                    "legIndex": leg_idx
+                                })
+                        return {
+                            "ok": True,
+                            "data": {
+                                "geometry": top["geometry"],
+                                "totalDistanceMeters": round(top["distance"]),
+                                "totalDurationSeconds": round(top["duration"]),
+                                "maneuvers": maneuvers,
+                                "provider": "osrm",
+                                "isFallback": False,
+                                "mode": clean_mode,
+                                "liveTraffic": False,
+                                "trafficStatus": TRAFFIC_DISCLAIMER
+                            }
+                        }
+        except Exception:
+            pass
+
+    # Multi-stop / national highway parallel leg routing:
+    # Stitches real road curves from every pair of stops without overloading public server limits
     try:
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            resp = await client.get(url, headers=headers)
-            if resp.status_code != 200:
-                # If specific mode endpoint (bike/foot) is down, try standard driving or straight line
-                if allow_fallback:
-                    fb = compute_straight_line(
-                        valid_stops,
-                        clean_mode,
-                        f"OSRM {clean_mode} service returned HTTP {resp.status_code}. Using straight-line fallback."
-                    )
-                    return fb
-                return {
-                    "ok": False,
-                    "error": {
-                        "code": "PROVIDER_UNAVAILABLE",
-                        "message": f"OSRM service returned HTTP {resp.status_code} for mode '{clean_mode}'"
-                    }
-                }
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            tasks = [
+                _fetch_osrm_single_leg(client, valid_stops[i], valid_stops[i + 1], base_url, clean_mode, leg_idx=i)
+                for i in range(len(valid_stops) - 1)
+            ]
+            leg_results = await asyncio.gather(*tasks)
 
-            json_data = resp.json()
+        stitched_coords = []
+        all_maneuvers = []
+        total_dist = 0.0
+        total_dur = 0.0
+        road_legs = 0
 
-        if json_data.get("code") != "Ok" or not json_data.get("routes"):
-            if allow_fallback:
-                fb = compute_straight_line(
-                    valid_stops,
-                    clean_mode,
-                    f"OSRM returned no routes for mode '{clean_mode}'. Using straight-line fallback."
-                )
-                return fb
-            return {
-                "ok": False,
-                "error": {
-                    "code": "PROVIDER_UNAVAILABLE",
-                    "message": f"OSRM routing failed: {json_data.get('message', 'No valid route found')}"
-                }
+        for idx, leg in enumerate(leg_results):
+            total_dist += leg["distance"]
+            total_dur += leg["duration"]
+            if leg["ok"]:
+                road_legs += 1
+            all_maneuvers.extend(leg.get("maneuvers", []))
+
+            coords = leg["coordinates"]
+            if stitched_coords and coords:
+                stitched_coords.extend(coords[1:])
+            else:
+                stitched_coords.extend(coords)
+
+        is_fallback = (road_legs == 0)
+        return {
+            "ok": True,
+            "data": {
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": stitched_coords
+                },
+                "totalDistanceMeters": round(total_dist),
+                "totalDurationSeconds": round(total_dur),
+                "maneuvers": all_maneuvers,
+                "provider": "straightLine" if is_fallback else "osrm",
+                "isFallback": is_fallback,
+                "mode": clean_mode,
+                "liveTraffic": False,
+                "trafficStatus": TRAFFIC_DISCLAIMER
             }
-
-        top = json_data["routes"][0]
+        }
+    except Exception as e:
+        if allow_fallback:
+            return compute_straight_line(valid_stops, clean_mode, str(e))
+        return {
+            "ok": False,
+            "error": {
+                "code": "PROVIDER_UNAVAILABLE",
+                "message": f"Routing failed: {str(e)}"
+            }
+        }
         legs = [
             {
                 "distanceMeters": round(leg.get("distance", 0)),

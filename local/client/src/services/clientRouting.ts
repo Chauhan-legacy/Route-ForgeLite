@@ -272,7 +272,48 @@ export function clientOptimizeStops(stops: Stop[], options: Partial<Optimization
 // In-memory route calculation cache for instant 1->2->3 connection
 const routeCalculationCache = new Map<string, any>();
 
-// Client-Side OSRM Road Router with Straight-Line Fallback
+async function fetchSingleRoadLeg(
+  p1: { lat: number; lng: number },
+  p2: { lat: number; lng: number },
+  baseUrl: string,
+  modeSpeed: number
+): Promise<{ ok: boolean; coordinates: [number, number][]; distance: number; duration: number }> {
+  const url = `${baseUrl}/${p1.lng.toFixed(5)},${p1.lat.toFixed(5)};${p2.lng.toFixed(5)},${p2.lat.toFixed(5)}?overview=simplified&geometries=geojson`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6500);
+    const resp = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+        const r = data.routes[0];
+        const coords = r.geometry?.coordinates as [number, number][];
+        if (coords && coords.length >= 2) {
+          return {
+            ok: true,
+            coordinates: coords,
+            distance: r.distance,
+            duration: r.duration
+          };
+        }
+      }
+    }
+  } catch {
+    // Non-blocking fallback for this individual leg
+  }
+
+  // Graceful straight-line fallback for this individual leg if no road network exists (e.g. off-grid mountain pass)
+  const d = haversineDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+  return {
+    ok: false,
+    coordinates: [[p1.lng, p1.lat], [p2.lng, p2.lat]],
+    distance: d,
+    duration: d / modeSpeed
+  };
+}
+
+// Client-Side OSRM Road Router with Parallel Highway Stitching
 export async function clientComputeRoute(
   stops: Stop[],
   mode: TransportMode = 'driving'
@@ -287,7 +328,7 @@ export async function clientComputeRoute(
   liveTraffic: boolean;
   trafficStatus: string;
 }> {
-  const validStops = stops.filter(s => s.latitude != null && s.longitude != null);
+  const validStops = stops.filter(s => (s.lat ?? s.latitude) != null && (s.lng ?? s.longitude) != null);
   const speed = MODE_SPEEDS_MPS[mode] || MODE_SPEEDS_MPS.driving;
 
   if (validStops.length < 2) {
@@ -304,103 +345,101 @@ export async function clientComputeRoute(
     };
   }
 
-  const coordStr = validStops.map(s => `${s.longitude!.toFixed(5)},${s.latitude!.toFixed(5)}`).join(';');
+  const coordStr = validStops.map(s => `${(s.lng ?? s.longitude)!.toFixed(5)},${(s.lat ?? s.latitude)!.toFixed(5)}`).join(';');
   const cacheKey = `${mode}:${coordStr}`;
   if (routeCalculationCache.has(cacheKey)) {
     return { ...routeCalculationCache.get(cacheKey) };
   }
 
-  // Fallback Straight Line Generator
-  const createFallback = (reason = '') => {
-    const coords = validStops.map(s => [s.longitude!, s.latitude!]);
-    let dist = 0;
-    for (let i = 0; i < validStops.length - 1; i++) {
-      dist += haversineDistance(validStops[i].latitude!, validStops[i].longitude!, validStops[i + 1].latitude!, validStops[i + 1].longitude!);
+  const baseUrl = OSRM_ENDPOINTS[mode] || OSRM_ENDPOINTS.driving;
+
+  // For 2 to 3 stops, attempt single request first
+  if (validStops.length <= 3) {
+    try {
+      const url = `${baseUrl}/${coordStr}?overview=simplified&geometries=geojson&steps=false`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const resp = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+          const top = data.routes[0];
+          const result = {
+            ok: true,
+            geometry: top.geometry,
+            totalDistanceMeters: Math.round(top.distance),
+            totalDurationSeconds: Math.round(top.duration),
+            provider: 'osrm',
+            isFallback: false,
+            mode,
+            liveTraffic: false,
+            trafficStatus: TRAFFIC_DISCLAIMER
+          };
+          routeCalculationCache.set(cacheKey, result);
+          return result;
+        }
+      }
+    } catch {
+      // Fall through to pairwise highway routing
     }
-    return {
-      ok: true,
-      geometry: { type: 'LineString', coordinates: coords },
-      totalDistanceMeters: Math.round(dist),
-      totalDurationSeconds: Math.round(dist / speed),
-      provider: 'straightLine',
-      isFallback: true,
-      mode,
-      liveTraffic: false,
-      trafficStatus: TRAFFIC_DISCLAIMER,
-      reason
+  }
+
+  // Multi-stop national/urban road network router:
+  // Fetches highway road geometry leg-by-leg in parallel, stitching all highway curves seamlessly
+  const legPromises: Promise<any>[] = [];
+  for (let i = 0; i < validStops.length - 1; i++) {
+    const p1 = {
+      lat: (validStops[i].lat ?? validStops[i].latitude)!,
+      lng: (validStops[i].lng ?? validStops[i].longitude)!
     };
+    const p2 = {
+      lat: (validStops[i + 1].lat ?? validStops[i + 1].latitude)!,
+      lng: (validStops[i + 1].lng ?? validStops[i + 1].longitude)!
+    };
+    legPromises.push(fetchSingleRoadLeg(p1, p2, baseUrl, speed));
+  }
+
+  const legResults = await Promise.all(legPromises);
+
+  const stitchedCoords: [number, number][] = [];
+  let totalDistanceMeters = 0;
+  let totalDurationSeconds = 0;
+  let roadLegsCount = 0;
+
+  for (let i = 0; i < legResults.length; i++) {
+    const leg = legResults[i];
+    totalDistanceMeters += leg.distance;
+    totalDurationSeconds += leg.duration;
+    if (leg.ok) roadLegsCount++;
+
+    if (stitchedCoords.length > 0 && leg.coordinates.length > 0) {
+      // Skip the first coordinate to avoid duplicate point at the seam between legs
+      stitchedCoords.push(...leg.coordinates.slice(1));
+    } else {
+      stitchedCoords.push(...leg.coordinates);
+    }
+  }
+
+  const isFallback = roadLegsCount === 0;
+  const result = {
+    ok: true,
+    geometry: {
+      type: 'LineString',
+      coordinates: stitchedCoords
+    },
+    totalDistanceMeters: Math.round(totalDistanceMeters),
+    totalDurationSeconds: Math.round(totalDurationSeconds),
+    provider: isFallback ? 'straightLine' : 'osrm',
+    isFallback,
+    mode,
+    liveTraffic: false,
+    trafficStatus: TRAFFIC_DISCLAIMER
   };
 
-  if (validStops.length > 70) {
-    // For large routes in client mode, generate straight-line or chunked geometry
-    return createFallback('Large tour scale (> 70 stops)');
-  }
-
-  const baseUrl = OSRM_ENDPOINTS[mode] || OSRM_ENDPOINTS.driving;
-  const url = `${baseUrl}/${coordStr}?overview=full&geometries=geojson&steps=true`;
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 9000);
-    const resp = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-
-    if (!resp.ok) {
-      return createFallback(`OSRM HTTP ${resp.status}`);
-    }
-
-    const data = await resp.json();
-    if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-      return createFallback(data.message || 'No OSRM road geometry found');
-    }
-
-    const top = data.routes[0];
-    const maneuvers: any[] = [];
-    if (Array.isArray(top.legs)) {
-      top.legs.forEach((leg: any, legIdx: number) => {
-        if (Array.isArray(leg.steps)) {
-          leg.steps.forEach((step: any) => {
-            const m = step.maneuver || {};
-            const streetName = step.name || '';
-            const mType = m.type || 'turn';
-            const mMod = m.modifier || '';
-            let instruction = '';
-            if (streetName) {
-              instruction = mMod ? `${mType.charAt(0).toUpperCase() + mType.slice(1)} ${mMod} onto ${streetName}` : `Proceed on ${streetName}`;
-            } else {
-              instruction = `${mType.charAt(0).toUpperCase() + mType.slice(1)} ${mMod}`.trim() || 'Continue';
-            }
-            maneuvers.push({
-              instruction,
-              streetName,
-              distanceMeters: Math.round(step.distance || 0),
-              durationSeconds: Math.round(step.duration || 0),
-              type: mType,
-              modifier: mMod,
-              legIndex: legIdx
-            });
-          });
-        }
-      });
-    }
-
-    const result = {
-      ok: true,
-      geometry: top.geometry,
-      totalDistanceMeters: Math.round(top.distance),
-      totalDurationSeconds: Math.round(top.duration),
-      maneuvers,
-      provider: 'osrm',
-      isFallback: false,
-      mode,
-      liveTraffic: false,
-      trafficStatus: TRAFFIC_DISCLAIMER
-    };
-    routeCalculationCache.set(cacheKey, result);
-    return result;
-  } catch (err: any) {
-    return createFallback(err.message || 'Network error');
-  }
+  routeCalculationCache.set(cacheKey, result);
+  return result;
 }
 
 // Client-Side Nominatim Geocoding with Local Cache & Throttler

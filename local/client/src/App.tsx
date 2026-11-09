@@ -67,41 +67,14 @@ export const App: React.FC = () => {
       return;
     }
 
-    // 1. Instant 0ms optimistic connection line between waypoints
-    const immediateCoords = validStops.map(s => [
-      (s.lng ?? s.longitude)!,
-      (s.lat ?? s.latitude)!
-    ]);
-    setRouteGeometry({
-      type: 'LineString',
-      coordinates: immediateCoords
-    });
-
-    let approxDist = 0;
-    for (let i = 0; i < validStops.length - 1; i++) {
-      approxDist += haversineDistance(
-        (validStops[i].lat ?? validStops[i].latitude)!,
-        (validStops[i].lng ?? validStops[i].longitude)!,
-        (validStops[i + 1].lat ?? validStops[i + 1].latitude)!,
-        (validStops[i + 1].lng ?? validStops[i + 1].longitude)!
-      );
-    }
-    const speed = mode === 'walking' ? 1.25 : mode === 'cycling' ? 4.17 : 13.88;
-    setSummary(prev => ({
-      ...prev,
-      totalDistanceMeters: Math.round(approxDist),
-      totalDurationSeconds: Math.round(approxDist / speed),
-      mode
-    }));
-
-    // 2. Fetch full road geometry & turn maneuvers asynchronously
+    // Recalculate road geometry & turn maneuvers asynchronously via OSRM
     try {
       const calcData = await api.calculateRoute(routeId || currentRoute?.routeId || 'current', validStops, mode);
       if (calcData && calcData.geometry) {
         setRouteGeometry(calcData.geometry);
         setSummary({
-          totalDistanceMeters: calcData.totalDistanceMeters ?? calcData.summary?.totalDistanceMeters ?? Math.round(approxDist),
-          totalDurationSeconds: calcData.totalDurationSeconds ?? calcData.summary?.totalDurationSeconds ?? Math.round(approxDist / speed),
+          totalDistanceMeters: calcData.totalDistanceMeters ?? calcData.summary?.totalDistanceMeters ?? 0,
+          totalDurationSeconds: calcData.totalDurationSeconds ?? calcData.summary?.totalDurationSeconds ?? 0,
           provider: calcData.provider ?? calcData.summary?.provider ?? 'osrm',
           isFallback: !!(calcData.isFallback ?? calcData.summary?.isFallback),
           mode,
