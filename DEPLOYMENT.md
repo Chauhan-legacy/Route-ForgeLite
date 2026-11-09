@@ -1,82 +1,103 @@
-# RouteForge — Vercel & Free Cloud Deployment Guide
+# RouteForge — Free Deployment Guide: Vercel & Cloud Services
 
-This guide details how to deploy RouteForge to **Vercel** on the **Hobby Free Tier ($0/month)** with zero billing requirements, zero credit card prompts, and full public availability on desktop and mobile.
-
----
-
-## 1. Zero-Cost Architecture on Vercel
-
-RouteForge is engineered with a **hybrid resilient architecture**:
-- **Client-Side Autonomous Mode (Default for Vercel)**:
-  - When hosted on Vercel, the app operates completely autonomously in the user's browser.
-  - Route calculation runs via public free OSRM road endpoints.
-  - Traveling Salesperson (TSP) route optimization runs via client-side 2-opt algorithms.
-  - Address search uses throttled OpenStreetMap Nominatim.
-  - Route state is saved in the browser's persistent storage (`localStorage`).
-  - **Result: 100% free hosting with zero backend server costs and zero billing activation!**
-- **Connected Mode (Optional)**:
-  - If you configure `VITE_API_URL`, the frontend connects to your Python FastAPI backend powered by Google OR-Tools and SQLite.
+RouteForge is engineered with a **zero-cost, free-tier architecture**. It operates without paid API subscriptions, credit card mandates, or billing risk.
 
 ---
 
-## 2. Deploying to Vercel via GitHub (Recommended)
+## 1. Map Architecture: MapLibre GL JS + OpenFreeMap
 
-### Step 1: Push Project to GitHub
-1. Create a new repository on [GitHub](https://github.com/) (e.g., `routeforge`).
-2. In your terminal, initialize and push:
-```bash
+- **Vector Map Engine**: [MapLibre GL JS](https://maplibre.org/)
+- **Default Vector Tile Style**: `https://tiles.openfreemap.org/styles/positron`
+- **Alternative Free Vector Styles**:
+  - Liberty: `https://tiles.openfreemap.org/styles/liberty`
+  - Bright: `https://tiles.openfreemap.org/styles/bright`
+- **Zero API Keys**: Tiles load directly over HTTPS without tokens, accounts, credit cards, or watermarks.
+
+---
+
+## 2. Frontend Deployment on Vercel (Hobby Free Plan)
+
+### Step 1: Push Repository to GitHub
+```cmd
 git init
 git add .
-git commit -m "feat: complete RouteForge free multi-stop optimizer"
+git commit -m "feat: MapLibre OpenFreeMap integration and Vercel readiness"
 git branch -M main
 git remote add origin https://github.com/<your-username>/routeforge.git
 git push -u origin main
 ```
 
 ### Step 2: Import into Vercel
-1. Log in to [Vercel](https://vercel.com/) (Free Hobby plan).
-2. Click **"Add New..."** -> **"Project"**.
-3. Select your GitHub repository (`routeforge`).
-4. Configure the project settings:
+1. Go to [Vercel](https://vercel.com/) and sign in with your GitHub account.
+2. Click **"Add New..."** > **"Project"**.
+3. Select your `routeforge` repository.
+4. Project settings are automatically detected via [`vercel.json`](file:///c:/Users/Priyansh/Desktop/ROUTE-FORGE0/vercel.json):
    - **Framework Preset**: `Vite`
-   - **Root Directory**: `./` (leave default)
    - **Build Command**: `npm --prefix local/client run build`
    - **Output Directory**: `local/client/dist`
    - **Install Command**: `npm --prefix local/client install`
 5. Click **"Deploy"**.
 
-Within ~45 seconds, your public website will be live at `https://routeforge-xxxx.vercel.app`!
+Within ~45 seconds, your site will be live at `https://routeforge-xxxx.vercel.app`.
 
----
-
-## 3. Deploying via Vercel CLI (Alternative)
-
-If you prefer deploying directly from your Windows command line:
-
-```bash
-# 1. Install Vercel CLI globally (one-time)
-npm install -g vercel
-
-# 2. Build the client bundle locally
-npm --prefix local/client run build
-
-# 3. Deploy to Vercel
-vercel --prod
+### SPA Routing & Deep Links on Vercel
+The included `vercel.json` defines single-page application (SPA) rewrites:
+```json
+{
+  "version": 2,
+  "buildCommand": "npm --prefix local/client run build",
+  "outputDirectory": "local/client/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
 ```
-
-When prompted:
-- Set up and deploy? **Yes**
-- Which scope? Select your personal free account
-- Link to existing project? **No**
-- What's your project's name? `routeforge`
-- In which directory is your code located? `./`
+Page refreshes, browser history, and deep route URLs (`/route/:id`) resolve properly without 404 errors.
 
 ---
 
-## 4. Mobile & Desktop Responsive Access
+## 3. Backend Architecture & Hosting Options
 
-Once deployed to Vercel:
-- **Desktop**: Full dual-pane split workspace featuring the live sequence management deck on the left and the interactive high-contrast CartoDB Leaflet map on the right.
-- **Mobile Phones (iOS & Android)**: Adaptive responsive layout with a floating bottom switcher pill to seamlessly toggle between the Waypoints Deck and Fullscreen Map View.
-- **Offline / Standalone Preview**: The app continues to calculate routes and optimize stops even without an active internet connection using straight-line fallback.
+### Option A: 100% Autonomous Client-Side Engine (Default on Vercel)
+- The frontend includes a standalone geospatial engine ([`clientRouting.ts`](file:///c:/Users/Priyansh/Desktop/ROUTE-FORGE0/local/client/src/services/clientRouting.ts)).
+- If `VITE_API_URL` is empty, the app runs autonomously in the user's browser:
+  - Routing: Direct public OSRM endpoints (`router.project-osrm.org`)
+  - Tour Optimization: Client-side 2-opt TSP optimizer
+  - Geocoding: Throttled OpenStreetMap Nominatim
+  - Persistence: Browser `localStorage`
+- **Cost**: **$0.00 / month forever**. No remote backend server is required for public access.
 
+### Option B: Free Python Backend on Render (Optional)
+If you wish to run the full Python FastAPI backend with Google OR-Tools in the cloud:
+1. Sign up for free at [Render](https://render.com/).
+2. Click **"New"** > **"Blueprint"** and connect your GitHub repository.
+3. Render automatically reads the repository's [`render.yaml`](file:///c:/Users/Priyansh/Desktop/ROUTE-FORGE0/render.yaml) file:
+   - **Plan**: `Free` ($0/mo)
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT`
+4. Copy your backend service URL (e.g., `https://routeforge-api.onrender.com`).
+5. In your Vercel project settings under **Settings > Environment Variables**, add:
+   - `VITE_API_URL` = `https://routeforge-api.onrender.com`
+6. Redeploy the frontend on Vercel.
+
+---
+
+## 4. Local Windows Execution
+
+To run locally on Windows:
+
+```cmd
+cd /d C:\Users\Priyansh\Desktop\ROUTE-FORGE0
+start_routeforge.bat
+```
+*(or run `start.bat`)*
+
+- The launcher activates the virtual environment, verifies dependencies, compiles the Vite frontend, checks the SQLite database, and opens **`http://127.0.0.1:8000`**.
+- To stop the server:
+  ```cmd
+  stop.bat
+  ```

@@ -8,7 +8,8 @@ RouteForge is strictly engineered around **100% free-tier, open-source geospatia
 
 | Service Layer | Provider | Free Policy & Rate Limits | Cost |
 | :--- | :--- | :--- | :--- |
-| **Map Rendering** | Leaflet + CartoDB / OSM | Public raster tile servers (Dark Matter & Voyager) | Free ($0) |
+| **Vector Map Engine** | MapLibre GL JS | Open-source WebGL vector map rendering | Free ($0) |
+| **Vector Map Tiles** | OpenFreeMap (`positron`, `liberty`, `bright`) | Completely free vector tile service; no API key, no token, no account | Free ($0) |
 | **Road Routing** | OSRM (Project-OSRM) | Free public routing endpoints for cars, bikes, and pedestrians | Free ($0) |
 | **Geocoding** | Nominatim (OpenStreetMap) | Free community geocoder throttled to max 1 req/sec with local caching | Free ($0) |
 | **TSP Optimization** | Google OR-Tools + 2-Opt | Local C++ / Python heuristic engine; runs on your machine with 0 network calls | Free ($0) |
@@ -16,7 +17,21 @@ RouteForge is strictly engineered around **100% free-tier, open-source geospatia
 
 ---
 
-## 2. Road Routing Configuration (OSRM)
+## 2. OpenFreeMap Vector Basemaps
+
+RouteForge utilizes **OpenFreeMap** styles:
+- **Default (Positron)**: `https://tiles.openfreemap.org/styles/positron`
+- **Liberty**: `https://tiles.openfreemap.org/styles/liberty`
+- **Bright**: `https://tiles.openfreemap.org/styles/bright`
+
+### Key Advantages
+- **No Watermarks**: Clean, crisp vector tiles with zero third-party branding overlays.
+- **No Registration or API Keys**: Endpoints are queried directly over standard HTTPS.
+- **WebGL Hardware Acceleration**: Fluid 60fps panning, zooming, and tilting powered by MapLibre GL JS.
+
+---
+
+## 3. Road Routing Configuration (OSRM)
 
 RouteForge queries free public OSRM instances:
 - **Driving**: `https://router.project-osrm.org/route/v1/driving/{coords}`
@@ -25,7 +40,7 @@ RouteForge queries free public OSRM instances:
 
 ### Chunking & Resilience Policy
 - Public OSRM servers reject URLs when coordinate parameters exceed ~80-100 waypoints.
-- RouteForge automatically partitions requests exceeding 70 waypoints into 35-stop chunked windows to avoid HTTP 414 / 400 URI length limits.
+- RouteForge automatically partitions requests exceeding 70 waypoints into 35-stop chunked windows to avoid URI length limits.
 - If an OSRM instance experiences network congestion or downtime, RouteForge immediately activates **labeled straight-line Haversine fallback**:
   - Distance is calculated using Great-Circle distance between consecutive waypoints.
   - Duration is estimated via standard transit velocities:
@@ -36,7 +51,7 @@ RouteForge queries free public OSRM instances:
 
 ---
 
-## 3. Geocoding Rate Throttling (OSM Nominatim)
+## 4. Geocoding Rate Throttling (OSM Nominatim)
 
 OpenStreetMap Nominatim enforces an acceptable usage policy:
 - Maximum 1 request per second.
@@ -50,7 +65,7 @@ OpenStreetMap Nominatim enforces an acceptable usage policy:
 
 ---
 
-## 4. Google OR-Tools & TSP Optimization
+## 5. Google OR-Tools & TSP Optimization
 
 Multi-stop route sequencing solves the **Traveling Salesperson Problem (TSP)**, which is mathematically NP-hard:
 - **Small to Medium Tours (3 - 100 stops)**: Google OR-Tools with Guided Local Search (GLS) metaheuristics.
@@ -60,9 +75,8 @@ Multi-stop route sequencing solves the **Traveling Salesperson Problem (TSP)**, 
 
 ---
 
-## 5. Live Traffic Transparency
+## 6. Live Traffic Transparency
 
-Because real-time traffic data requires commercial proprietary data sources (e.g., Google Maps Traffic or TomTom), RouteForge maintains absolute honesty by displaying the mandatory system disclaimer:
+Because real-time traffic data requires commercial proprietary data sources, RouteForge displays the mandatory system disclaimer:
 
 > **"Live traffic is unavailable. Route duration is based on estimated travel time."**
-

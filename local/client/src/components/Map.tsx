@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { Stop } from '../types';
 import { Maximize2, Minimize2, Crosshair, Layers } from 'lucide-react';
 
@@ -11,21 +11,19 @@ interface MapProps {
   onSelectStop?: (stopId: string) => void;
 }
 
-const TILE_LAYERS = {
-  voyager: {
-    name: 'Voyager',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  },
+// 100% Free Vector Map Styles from OpenFreeMap (Zero API Key, Zero Watermarks, Zero Cost)
+const OPENFREEMAP_STYLES = {
   positron: {
     name: 'Positron',
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    url: 'https://tiles.openfreemap.org/styles/positron',
   },
-  dark: {
-    name: 'Dark Matter',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  liberty: {
+    name: 'Liberty',
+    url: 'https://tiles.openfreemap.org/styles/liberty',
+  },
+  bright: {
+    name: 'Bright',
+    url: 'https://tiles.openfreemap.org/styles/bright',
   }
 };
 
@@ -36,80 +34,176 @@ export const Map: React.FC<MapProps> = ({
   onSelectStop
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const markersLayerRef = useRef<L.LayerGroup | null>(null);
-  const routeLayerRef = useRef<L.LayerGroup | null>(null);
-  const currentTileLayerRef = useRef<L.TileLayer | null>(null);
+  const mapInstanceRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const isLoadedRef = useRef<boolean>(false);
 
-  const [activeTileKey, setActiveTileKey] = useState<keyof typeof TILE_LAYERS>('voyager');
+  const [activeStyleKey, setActiveStyleKey] = useState<keyof typeof OPENFREEMAP_STYLES>('positron');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Initialize Map
+  // Helper to construct GeoJSON LineString from routeGeometry
+  const getGeoJsonRoute = useCallback((geom: any): GeoJSON.Feature<GeoJSON.LineString> | null => {
+    if (!geom) return null;
+
+    let coordinates: [number, number][] = [];
+
+    if (Array.isArray(geom)) {
+      if (geom.length > 0 && Array.isArray(geom[0])) {
+        // Handle coordinates array
+        coordinates = geom.map((pt: any) => {
+          if (Array.isArray(pt) && pt.length >= 2) {
+            // [lon, lat] for MapLibre GeoJSON
+            return [pt[0], pt[1]] as [number, number];
+          }
+          return [0, 0] as [number, number];
+        });
+      }
+    } else if (geom.type === 'LineString' && Array.isArray(geom.coordinates)) {
+      coordinates = geom.coordinates as [number, number][];
+    }
+
+    if (coordinates.length < 2) return null;
+
+    return {
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates
+      }
+    };
+  }, []);
+
+  // Update or add route layers onto the active style
+  const renderRouteLayers = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const geojsonData = getGeoJsonRoute(routeGeometry);
+
+    const source = map.getSource('rf-route-source') as maplibregl.GeoJSONSource | undefined;
+
+    if (!geojsonData) {
+      if (source) {
+        source.setData({
+          type: 'FeatureCollection',
+          features: []
+        });
+      }
+      return;
+    }
+
+    if (source) {
+      source.setData(geojsonData);
+    } else {
+      map.addSource('rf-route-source', {
+        type: 'geojson',
+        data: geojsonData
+      });
+
+      // Casing / Shadow line for crisp vector definition
+      map.addLayer({
+        id: 'rf-route-casing',
+        type: 'line',
+        source: 'rf-route-source',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#0F172A',
+          'line-width': 5.5,
+          'line-opacity': 0.15
+        }
+      });
+
+      // Core path line
+      map.addLayer({
+        id: 'rf-route-core',
+        type: 'line',
+        source: 'rf-route-source',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#1E293B',
+          'line-width': 3.5,
+          'line-opacity': 0.95
+        }
+      });
+    }
+
+    // Fit route bounds
+    if (geojsonData.geometry.coordinates.length > 1) {
+      const bounds = new maplibregl.LngLatBounds();
+      geojsonData.geometry.coordinates.forEach(coord => bounds.extend(coord));
+      map.fitBounds(bounds, { padding: 60, maxZoom: 16, duration: 600 });
+    }
+  }, [routeGeometry, getGeoJsonRoute]);
+
+  // Initialize MapLibre GL Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    const map = L.map(mapContainerRef.current, {
-      center: [37.7749, -122.4194],
+    const initialStyle = OPENFREEMAP_STYLES[activeStyleKey].url;
+
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: initialStyle,
+      center: [-122.4194, 37.7749], // San Francisco default
       zoom: 12,
-      zoomControl: false,
+      attributionControl: false,
     });
 
-    // Custom zoom control in bottom right
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    // Clean navigation control
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 
-    // Initial tile layer
-    const tileConfig = TILE_LAYERS[activeTileKey];
-    const tileLayer = L.tileLayer(tileConfig.url, {
-      attribution: tileConfig.attribution,
-      maxZoom: 19,
-      subdomains: 'abcd'
-    }).addTo(map);
-    currentTileLayerRef.current = tileLayer;
+    map.on('load', () => {
+      isLoadedRef.current = true;
+      renderRouteLayers();
+    });
 
-    // Layer groups for markers and routes
-    markersLayerRef.current = L.layerGroup().addTo(map);
-    routeLayerRef.current = L.layerGroup().addTo(map);
+    map.on('style.load', () => {
+      renderRouteLayers();
+    });
 
-    // Click handler
-    map.on('click', (e: L.LeafletMouseEvent) => {
+    // Map click handler for adding waypoints
+    map.on('click', (e) => {
       if (onMapClick) {
-        onMapClick(e.latlng.lat, e.latlng.lng);
+        onMapClick(e.lngLat.lat, e.lngLat.lng);
       }
     });
 
     mapInstanceRef.current = map;
 
     return () => {
+      markersRef.current.forEach(m => m.remove());
+      markersRef.current = [];
       map.remove();
       mapInstanceRef.current = null;
+      isLoadedRef.current = false;
     };
   }, []);
 
-  // Update Tile Layer
+  // Handle Style Switch
+  const handleStyleChange = (key: keyof typeof OPENFREEMAP_STYLES) => {
+    if (key === activeStyleKey) return;
+    setActiveStyleKey(key);
+    const map = mapInstanceRef.current;
+    if (map) {
+      map.setStyle(OPENFREEMAP_STYLES[key].url);
+    }
+  };
+
+  // Sync Markers
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
 
-    if (currentTileLayerRef.current) {
-      map.removeLayer(currentTileLayerRef.current);
-    }
-
-    const tileConfig = TILE_LAYERS[activeTileKey];
-    const newTileLayer = L.tileLayer(tileConfig.url, {
-      attribution: tileConfig.attribution,
-      maxZoom: 19,
-      subdomains: 'abcd'
-    }).addTo(map);
-    currentTileLayerRef.current = newTileLayer;
-  }, [activeTileKey]);
-
-  // Update Markers
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const markersGroup = markersLayerRef.current;
-    if (!map || !markersGroup) return;
-
-    markersGroup.clearLayers();
+    // Clear existing markers
+    markersRef.current.forEach(m => m.remove());
+    markersRef.current = [];
 
     const validStops = stops
       .map(s => ({
@@ -129,47 +223,36 @@ export const Map: React.FC<MapProps> = ({
       let border = '2px solid #FFFFFF';
 
       if (isFirst) {
-        bgColor = '#047857'; // Refined Emerald
+        bgColor = '#047857'; // Refined Emerald Origin
       } else if (isLast) {
-        bgColor = '#1D4ED8'; // Refined Royal Blue
+        bgColor = '#1D4ED8'; // Refined Royal Blue Destination
       }
 
       if (isLocked) {
-        bgColor = '#B45309'; // Refined Amber
+        bgColor = '#B45309'; // Refined Amber Locked Invariant
         border = '2px solid #FEF3C7';
       }
 
-      const html = `
-        <div style="
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: ${bgColor};
-          color: ${textColor};
-          border: ${border};
-          box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: 'JetBrains Mono', monospace, sans-serif;
-          font-size: 11px;
-          font-weight: 600;
-          cursor: pointer;
-        ">
-          ${idx + 1}
-        </div>
-      `;
+      // Create custom DOM element for marker
+      const el = document.createElement('div');
+      el.className = 'rf-maplibre-marker';
+      el.style.width = '28px';
+      el.style.height = '28px';
+      el.style.borderRadius = '50%';
+      el.style.background = bgColor;
+      el.style.color = textColor;
+      el.style.border = border;
+      el.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.2)';
+      el.style.display = 'flex';
+      el.style.alignItems = 'center';
+      el.style.justifyContent = 'center';
+      el.style.fontFamily = "'JetBrains Mono', monospace, sans-serif";
+      el.style.fontSize = '11px';
+      el.style.fontWeight = '600';
+      el.innerText = String(idx + 1);
 
-      const customIcon = L.divIcon({
-        className: 'rf-clean-marker',
-        html,
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
-      });
-
-      const marker = L.marker([stop.resolvedLat, stop.resolvedLng], { icon: customIcon });
-
-      marker.bindPopup(`
+      // Popup
+      const popup = new maplibregl.Popup({ offset: 16, closeButton: true }).setHTML(`
         <div style="font-family: 'Plus Jakarta Sans', system-ui, sans-serif; min-width: 170px; color: #18181B; padding: 2px;">
           <div style="font-weight: 600; font-size: 13px; margin-bottom: 2px;">
             Stop ${idx + 1}: ${stop.name}
@@ -186,61 +269,46 @@ export const Map: React.FC<MapProps> = ({
         </div>
       `);
 
-      marker.on('click', () => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
         if (onSelectStop) onSelectStop(stop.stopId);
       });
 
-      markersGroup.addLayer(marker);
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([stop.resolvedLng, stop.resolvedLat])
+        .setPopup(popup)
+        .addTo(map);
+
+      markersRef.current.push(marker);
     });
 
+    // Auto-fit if stops exist and no geometry rendered yet
     if (validStops.length > 0 && !routeGeometry) {
-      const bounds = L.latLngBounds(validStops.map(s => [s.resolvedLat, s.resolvedLng]));
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+      const bounds = new maplibregl.LngLatBounds();
+      validStops.forEach(s => bounds.extend([s.resolvedLng, s.resolvedLat]));
+      map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 600 });
     }
   }, [stops, routeGeometry, onSelectStop]);
 
-  // Update Route Polyline
+  // Update Route Polyline when geometry updates
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    const routeGroup = routeLayerRef.current;
-    if (!map || !routeGroup) return;
-
-    routeGroup.clearLayers();
-
-    if (!routeGeometry) return;
-
-    let coords: [number, number][] = [];
-    if (Array.isArray(routeGeometry)) {
-      if (routeGeometry.length > 0 && Array.isArray(routeGeometry[0])) {
-        coords = routeGeometry.map((pt: any) => {
-          if (Array.isArray(pt) && pt.length >= 2) {
-            return [pt[1], pt[0]] as [number, number];
-          }
-          return [0, 0] as [number, number];
-        });
-      }
-    } else if (routeGeometry.type === 'LineString' && Array.isArray(routeGeometry.coordinates)) {
-      coords = routeGeometry.coordinates.map((pt: any) => [pt[1], pt[0]] as [number, number]);
+    if (mapInstanceRef.current && isLoadedRef.current) {
+      renderRouteLayers();
     }
+  }, [routeGeometry, renderRouteLayers]);
 
-    if (coords.length > 1) {
-      // Clean, refined navy polyline
-      const pathLine = L.polyline(coords, {
-        color: '#1E293B',
-        weight: 4,
-        opacity: 0.85,
-        lineCap: 'round',
-        lineJoin: 'round'
-      });
-
-      routeGroup.addLayer(pathLine);
-      map.fitBounds(pathLine.getBounds(), { padding: [50, 50], maxZoom: 16 });
-    }
-  }, [routeGeometry]);
-
+  // Center / Fit Bounds on demand
   const fitBoundsToAll = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
+
+    const geojsonData = getGeoJsonRoute(routeGeometry);
+    if (geojsonData && geojsonData.geometry.coordinates.length > 1) {
+      const bounds = new maplibregl.LngLatBounds();
+      geojsonData.geometry.coordinates.forEach(c => bounds.extend(c));
+      map.fitBounds(bounds, { padding: 60, maxZoom: 16 });
+      return;
+    }
 
     const validStops = stops
       .map(s => ({
@@ -250,15 +318,16 @@ export const Map: React.FC<MapProps> = ({
       .filter(s => s.lat != null && s.lng != null) as Array<{ lat: number; lng: number }>;
 
     if (validStops.length > 0) {
-      const bounds = L.latLngBounds(validStops.map(s => [s.lat, s.lng]));
-      map.fitBounds(bounds, { padding: [50, 50] });
+      const bounds = new maplibregl.LngLatBounds();
+      validStops.forEach(s => bounds.extend([s.lng, s.lat]));
+      map.fitBounds(bounds, { padding: 60, maxZoom: 15 });
     }
   };
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
     setTimeout(() => {
-      mapInstanceRef.current?.invalidateSize();
+      mapInstanceRef.current?.resize();
     }, 200);
   };
 
@@ -268,19 +337,19 @@ export const Map: React.FC<MapProps> = ({
 
       {/* Floating Action Controls */}
       <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
-        {/* Layer Switcher */}
+        {/* OpenFreeMap Style Switcher */}
         <div className="flex items-center p-0.5 rounded-xl bg-white border border-editorial-border shadow-card">
-          {(Object.keys(TILE_LAYERS) as Array<keyof typeof TILE_LAYERS>).map((k) => (
+          {(Object.keys(OPENFREEMAP_STYLES) as Array<keyof typeof OPENFREEMAP_STYLES>).map((k) => (
             <button
               key={k}
-              onClick={() => setActiveTileKey(k)}
+              onClick={() => handleStyleChange(k as keyof typeof OPENFREEMAP_STYLES)}
               className={`px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                activeTileKey === k
+                activeStyleKey === k
                   ? 'bg-editorial-ink text-white font-medium shadow-sm'
                   : 'text-editorial-body hover:text-editorial-ink'
               }`}
             >
-              {k}
+              {OPENFREEMAP_STYLES[k as keyof typeof OPENFREEMAP_STYLES].name}
             </button>
           ))}
         </div>
@@ -289,7 +358,7 @@ export const Map: React.FC<MapProps> = ({
         <button
           onClick={fitBoundsToAll}
           className="w-8 h-8 rounded-xl bg-white border border-editorial-border text-editorial-body hover:text-editorial-ink flex items-center justify-center shadow-card transition-colors"
-          title="Center route"
+          title="Center route bounds"
         >
           <Crosshair className="w-4 h-4" />
         </button>
@@ -304,10 +373,12 @@ export const Map: React.FC<MapProps> = ({
         </button>
       </div>
 
-      {/* Subtle attribution pill */}
-      <div className="absolute bottom-4 left-4 z-[400] hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur-sm border border-editorial-border text-[11px] text-editorial-subtle shadow-card pointer-events-none">
+      {/* OpenFreeMap Clean Attribution Pill (No Watermarks, 100% Free Vector Tiles) */}
+      <div className="absolute bottom-4 left-4 z-[400] hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 backdrop-blur-sm border border-editorial-border text-[11px] text-editorial-subtle shadow-card pointer-events-none">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-        <span>CartoDB Basemap</span>
+        <span>OpenFreeMap Vector Tiles</span>
+        <span className="text-editorial-border">|</span>
+        <span>MapLibre GL</span>
         <span className="text-editorial-border">|</span>
         <span>Click map to place waypoint</span>
       </div>

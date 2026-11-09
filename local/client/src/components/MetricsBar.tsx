@@ -107,11 +107,10 @@ export const MetricsBar: React.FC<MetricsBarProps> = ({
         <div className="flex items-center p-0.5 rounded-full bg-editorial-surface border border-editorial-border shadow-subtle">
           <button
             onClick={() => onModeChange('driving')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              summary.mode === 'driving'
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${summary.mode === 'driving'
                 ? 'bg-editorial-ink text-editorial-bg shadow-sm'
                 : 'text-editorial-body hover:text-editorial-ink'
-            }`}
+              }`}
           >
             <Car className="w-3.5 h-3.5" />
             <span>Driving</span>
@@ -119,11 +118,10 @@ export const MetricsBar: React.FC<MetricsBarProps> = ({
 
           <button
             onClick={() => onModeChange('cycling')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              summary.mode === 'cycling'
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${summary.mode === 'cycling'
                 ? 'bg-editorial-ink text-editorial-bg shadow-sm'
                 : 'text-editorial-body hover:text-editorial-ink'
-            }`}
+              }`}
           >
             <Bike className="w-3.5 h-3.5" />
             <span>Cycling</span>
@@ -131,11 +129,10 @@ export const MetricsBar: React.FC<MetricsBarProps> = ({
 
           <button
             onClick={() => onModeChange('walking')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-              summary.mode === 'walking'
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${summary.mode === 'walking'
                 ? 'bg-editorial-ink text-editorial-bg shadow-sm'
                 : 'text-editorial-body hover:text-editorial-ink'
-            }`}
+              }`}
           >
             <Footprints className="w-3.5 h-3.5" />
             <span>Walking</span>
