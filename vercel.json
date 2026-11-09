@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "buildCommand": "npm --prefix local/client run build",
+  "outputDirectory": "local/client/dist",
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
+

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RouteForge — Modern Multi-Stop Route Intelligence</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- RouteForge Modern Luxury Stylesheet -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+  <!-- Canvas Viewport Frame (Insp. Image 1 & 2) -->
+  <div class="app-viewport">
+    <div class="studio-card">
+      
+      <!-- Top Modern Header -->
+      <header class="top-nav">
+        <div class="nav-brand-section">
+          <div class="brand-glyph">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" fill="url(#brandGrad)"/>
+              <line x1="4" y1="22" x2="4" y2="15" stroke="#111827" stroke-width="2.5" stroke-linecap="round"/>
+              <defs>
+                <linearGradient id="brandGrad" x1="4" y1="2" x2="20" y2="15" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#4f46e5"/>
+                  <stop offset="1" stop-color="#06b6d4"/>
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+          <span class="brand-text">RouteForge</span>
+          <span class="brand-sub-pill">Intelligence</span>
+        </div>
+
+        <!-- Center: Route Selector Dropdown & Active Route Switcher -->
+        <div class="nav-center-menu">
+          <div class="route-switcher-wrapper">
+            <button class="route-switcher-pill" id="routeSelectorBtn" onclick="toggleRouteMenu()" title="Switch or manage saved routes">
+              <span class="pill-dot"></span>
+              <input type="text" id="routeTitle" class="route-title-input" value="Loading route..." placeholder="Route Name" onclick="event.stopPropagation()" />
+              <svg class="chevron-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            <!-- Route Switcher Popover -->
+            <div class="route-popover" id="routeMenuPopover" style="display: none;">
+              <div class="popover-head">
+                <span class="popover-heading">Workspace Routes</span>
+                <button class="pill-btn pill-btn-dark pill-btn-xs" onclick="createNewRoute(event)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  New Route
+                </button>
+              </div>
+              <div class="popover-list" id="popoverRouteList">
+                <div class="popover-empty">Loading routes...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Actions & Sync Status -->
+        <div class="nav-actions">
+          <div class="sync-badge" id="syncPill" title="Server Sync State">
+            <span class="sync-ping-dot" id="syncDot"></span>
+            <span class="sync-text" id="syncText">Connected</span>
+          </div>
+
+          <button class="pill-btn pill-btn-outline" onclick="copyShareUrl()" title="Copy route link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            Share
+          </button>
+
+          <button class="pill-btn pill-btn-outline" onclick="exportCSV()" title="Export CSV file">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export CSV
+          </button>
+
+          <button class="pill-btn pill-btn-dark" onclick="createNewRoute(event)" title="Create a new route">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            New Route
+          </button>
+        </div>
+      </header>
+
+      <!-- Search & Command Strip (Insp. Image 2 Pill Search Bar) -->
+      <section class="command-strip">
+        <form id="addStopForm" class="search-command-pill">
+          <div class="search-icon-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <input type="text" id="addStopInput" class="search-command-input" placeholder="Enter destination, street address, or landmark to add stop..." required autocomplete="off" />
+          
+          <div class="search-buttons-group">
+            <button type="button" class="pill-btn pill-btn-subtle" onclick="openImportModal()" title="Batch CSV or paste import">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Import CSV
+            </button>
+            <button type="submit" class="search-submit-btn" title="Add location to itinerary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Floating Stat Cards Banner (Exact Match Insp. Image 1 & 2 Cards) -->
+      <section class="stats-banner-row">
+        <!-- Card 1: Distance -->
+        <div class="stat-card">
+          <div class="stat-card-top">
+            <span class="stat-label">Total Distance</span>
+            <span id="routeType" class="pill-tag pill-tag-blue">Road (OSRM)</span>
+          </div>
+          <div class="stat-main">
+            <span id="totalDist" class="stat-number">0.0 km</span>
+          </div>
+          <div class="stat-footer-text">Calculated road trajectory</div>
+        </div>
+
+        <!-- Card 2: Duration -->
+        <div class="stat-card">
+          <div class="stat-card-top">
+            <span class="stat-label">Driving Time</span>
+            <span class="pill-tag pill-tag-purple">Turn-by-turn</span>
+          </div>
+          <div class="stat-main">
+            <span id="totalTime" class="stat-number">0 min</span>
+          </div>
+          <div class="stat-footer-text">Standard traffic conditions</div>
+        </div>
+
+        <!-- Card 3: 2-Opt Efficiency -->
+        <div class="stat-card stat-card-highlight">
+          <div class="stat-card-top">
+            <span class="stat-label">Tour Efficiency</span>
+            <span class="pill-tag pill-tag-green" id="savingsBadge">2-Opt Engine</span>
+          </div>
+          <div class="stat-main">
+            <span id="savingsPercent" class="stat-number">0.0%</span>
+          </div>
+          <div class="stat-footer-text" id="savingsSubtext">Distance savings from optimization</div>
+        </div>
+
+        <!-- Card 4: Waypoints Count -->
+        <div class="stat-card">
+          <div class="stat-card-top">
+            <span class="stat-label">Waypoints</span>
+            <span class="pill-tag pill-tag-amber" id="lockedCountBadge">0 Locked</span>
+          </div>
+          <div class="stat-main">
+            <span id="stopCount" class="stat-number">0 Stops</span>
+          </div>
+          <div class="stat-footer-text">Active itinerary sequence</div>
+        </div>
+      </section>
+
+      <!-- Main Interactive Planner Workspace -->
+      <main class="planner-workspace">
+        <!-- Left: Stops Itinerary Column -->
+        <aside class="itinerary-column">
+          <div class="itinerary-header">
+            <div class="itinerary-title-row">
+              <h3 class="itinerary-heading">Route Itinerary</h3>
+              <span class="itinerary-badge" id="itineraryCountBadge">0 stops</span>
+            </div>
+
+            <!-- Primary Action Buttons -->
+            <div class="itinerary-actions-row">
+              <button class="pill-btn pill-btn-primary pill-btn-sm flex-1" onclick="optimizeRoute()" title="Run 2-Opt TSP optimizer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+                Optimize Tour
+              </button>
+
+              <button class="pill-btn pill-btn-outline pill-btn-sm flex-1" onclick="calculateRoute('osrm')" title="Compute road polyline">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+                </svg>
+                Calculate Road
+              </button>
+
+              <button class="pill-icon-btn" onclick="reverseRoute()" title="Reverse itinerary direction">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="17 1 21 5 17 9"></polyline>
+                  <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+                  <polyline points="7 23 3 19 7 15"></polyline>
+                  <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+                </svg>
+              </button>
+
+              <button class="pill-icon-btn" onclick="fitRouteBounds()" title="Fit all stops in map view">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <polyline points="9 21 3 21 3 15"></polyline>
+                  <line x1="21" y1="3" x2="14" y2="10"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Stops List Scroll Area -->
+          <div class="itinerary-list-container" id="stopList">
+            <div class="itinerary-empty-state">
+              <div class="empty-icon-circle">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="1.8">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </div>
+              <h4 class="empty-title">Your itinerary is empty</h4>
+              <p class="empty-desc">Enter any address or landmark in the search bar above, or import a CSV file to generate your route.</p>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right: Map Studio Container -->
+        <section class="map-studio-container">
+          <!-- Floating Notification Toast -->
+          <div id="alertBanner" class="floating-alert banner-warning" style="display: none;">
+            <div class="alert-icon-wrap" id="alertIcon"></div>
+            <span id="alertMessage" class="alert-text-body">Notification</span>
+            <button class="alert-dismiss-btn" onclick="dismissAlert()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <!-- Floating Map Canvas Action Dock -->
+          <div class="floating-map-dock">
+            <button class="dock-pill-btn" onclick="fitRouteBounds()" title="Zoom to fit route">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+              Fit View
+            </button>
+            <button class="dock-pill-btn" onclick="reverseRoute()" title="Reverse direction">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path></svg>
+              Reverse
+            </button>
+          </div>
+
+          <!-- Leaflet Interactive Map -->
+          <div id="map"></div>
+        </section>
+      </main>
+
+    </div>
+  </div>
+
+  <!-- CSV & Address Import Modal (Luxury Glass Card) -->
+  <div id="importModal" class="modal-overlay" style="display: none;">
+    <div class="modal-dialog-card">
+      <div class="modal-head">
+        <div class="modal-head-title">
+          <div class="modal-badge-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title-text">Batch Import Stops</h3>
+            <p class="modal-sub-text">Add multiple waypoints via CSV file or raw address list</p>
+          </div>
+        </div>
+        <button class="modal-close-pill" onclick="closeImportModal()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <div class="modal-content-body">
+        <!-- Drag & Drop Zone -->
+        <label class="dropzone-box" id="fileDropzone">
+          <div class="dropzone-glyph">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="1.8">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+          </div>
+          <span class="dropzone-primary-text">Click to choose or drop your CSV file here</span>
+          <span class="dropzone-secondary-text">Compliant with RFC 4180 CSV, quoted fields & Unicode addresses</span>
+          <input
+            type="file"
+            id="csvFileInput"
+            accept=".csv,text/csv,text/plain"
+            style="display: none;"
+            onchange="handleFileSelect(event)"
+          />
+        </label>
+
+        <div class="modal-separator">
+          <span>OR PASTE ADDRESSES</span>
+        </div>
+
+        <textarea id="pasteAddresses" class="modal-textarea" placeholder="Stephansplatz 3, 1010 Wien&#10;Prinz Eugen-Straße 27, 1030 Wien&#10;Schönbrunner Schloßstraße 47, 1130 Wien"></textarea>
+        <div id="importError" class="modal-error-banner" style="display: none;"></div>
+      </div>
+
+      <div class="modal-foot">
+        <button class="pill-btn pill-btn-outline" onclick="closeImportModal()">Cancel</button>
+        <button class="pill-btn pill-btn-primary" onclick="processImport()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          Import & Geocode
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RouteForge Client Application Controller -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

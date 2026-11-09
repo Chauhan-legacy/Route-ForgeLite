@@ -1,0 +1,649 @@
+<script>
+  (function () {
+    'use strict';
+
+    // Application State
+    var state = {
+      routeId: null,
+      route: null,
+      stops: [],
+      routeGeometry: null,
+      summary: { totalDistanceMeters: 0, totalDurationSeconds: 0, provider: null, isFallback: false },
+      syncStatus: 'connected', // 'connected' | 'syncing' | 'offline'
+      lastSynced: new Date(),
+      expectedRevision: 1,
+      isPolling: false,
+      isSaving: false
+    };
+
+    var map = null;
+    var markersLayer = null;
+    var routeLayer = null;
+    var pollTimer = null;
+
+    // Dom Elements
+    var titleInput = document.getElementById('routeTitle');
+    var syncDot = document.getElementById('syncDot');
+    var syncText = document.getElementById('syncText');
+    var stopListEl = document.getElementById('stopList');
+    var stopCountEl = document.getElementById('stopCount');
+    var totalDistEl = document.getElementById('totalDist');
+    var totalTimeEl = document.getElementById('totalTime');
+    var routeTypeEl = document.getElementById('routeType');
+    var alertBanner = document.getElementById('alertBanner');
+    var alertMessage = document.getElementById('alertMessage');
+    var importModal = document.getElementById('importModal');
+
+    // Utility: Format meters to km / mi
+    function formatDistance(meters) {
+      if (!meters || meters <= 0) return '0 km';
+      if (meters < 1000) return meters + ' m';
+      return (meters / 1000).toFixed(1) + ' km';
+    }
+
+    // Utility: Format seconds to hrs/mins
+    function formatDuration(seconds) {
+      if (!seconds || seconds <= 0) return '0 min';
+      var mins = Math.round(seconds / 60);
+      if (mins < 60) return mins + ' min';
+      var hrs = Math.floor(mins / 60);
+      var remMins = mins % 60;
+      return hrs + 'h ' + remMins + 'm';
+    }
+
+    // Banner notifications
+    function showAlert(message, type, autoDismissMs) {
+      alertMessage.textContent = message;
+      alertBanner.className = 'alert-banner banner-' + (type || 'warning');
+      alertBanner.style.display = 'flex';
+      if (autoDismissMs) {
+        setTimeout(dismissAlert, autoDismissMs);
+      }
+    }
+
+    function dismissAlert() {
+      alertBanner.style.display = 'none';
+    }
+    window.dismissAlert = dismissAlert;
+
+    // Sync status pill update
+    function updateSyncUI(status, label) {
+      state.syncStatus = status;
+      syncDot.className = 'sync-dot ' + (status === 'syncing' ? 'syncing' : (status === 'offline' ? 'offline' : ''));
+      syncText.textContent = label || (status === 'connected' ? 'Connected' : (status === 'syncing' ? 'Syncing...' : 'Offline'));
+    }
+
+    // API Bridge for Apps Script: Use google.script.run when available, fallback to fetch (?action=)
+    function callServer(action, payload) {
+      return new Promise(function (resolve, reject) {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(function (res) {
+              if (res && res.ok) {
+                resolve(res);
+              } else {
+                var err = new Error(res && res.error ? res.error.message : 'Unknown server error');
+                err.code = res && res.error ? res.error.code : 'SERVER_ERROR';
+                reject(err);
+              }
+            })
+            .withFailureHandler(function (err) {
+              reject(err);
+            })
+            .handleApiAction(action, payload);
+        } else {
+          // Direct fetch fallback
+          var url = window.location.pathname + '?action=' + encodeURIComponent(action);
+          fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (res) {
+              if (res && res.ok) resolve(res);
+              else {
+                var err = new Error(res && res.error ? res.error.message : 'Request failed');
+                err.code = res && res.error ? res.error.code : 'ERROR';
+                reject(err);
+              }
+            })
+            .catch(reject);
+        }
+      });
+    }
+
+    // Map initialization
+    function initMap() {
+      if (typeof L === 'undefined') {
+        showAlert('Leaflet map library could not be loaded. Running in list-only mode.', 'danger');
+        return;
+      }
+
+      try {
+        map = L.map('map', { zoomControl: true }).setView([48.2082, 16.3738], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        markersLayer = L.featureGroup().addTo(map);
+        routeLayer = L.geoJSON(null, {
+          style: function (feature) {
+            return {
+              color: state.summary.isFallback ? '#f59e0b' : '#3b82f6',
+              weight: 5,
+              opacity: 0.85,
+              dashArray: state.summary.isFallback ? '6, 8' : null
+            };
+          }
+        }).addTo(map);
+      } catch (e) {
+        console.error('Map init failed', e);
+      }
+    }
+
+    // Redraw map markers and route geometry
+    function renderMap() {
+      if (!map || !markersLayer) return;
+
+      markersLayer.clearLayers();
+
+      var bounds = [];
+      state.stops.forEach(function (stop, idx) {
+        if (typeof stop.latitude === 'number' && typeof stop.longitude === 'number') {
+          var isLocked = stop.metadata && stop.metadata.locked;
+          var icon = L.divIcon({
+            className: 'rf-marker-pin-wrapper',
+            html: '<div class="rf-marker-pin ' + (isLocked ? 'locked' : '') + '">' + (idx + 1) + '</div>',
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+          });
+
+          var marker = L.marker([stop.latitude, stop.longitude], { icon: icon });
+          marker.bindPopup(
+            '<strong>Stop ' + (idx + 1) + ': ' + escapeHtml(stop.name) + '</strong><br>' +
+            '<span style="font-size:0.8rem;color:#666;">' + escapeHtml(stop.address) + '</span><br>' +
+            (isLocked ? '<span style="color:#f59e0b;font-size:0.75rem;">Locked stop</span>' : '')
+          );
+          markersLayer.addLayer(marker);
+          bounds.push([stop.latitude, stop.longitude]);
+        }
+      });
+
+      // Update route polyline
+      if (routeLayer) {
+        routeLayer.clearLayers();
+        if (state.routeGeometry) {
+          routeLayer.addData(state.routeGeometry);
+        }
+      }
+
+      if (bounds.length > 0 && (!state.routeGeometry || state.stops.length <= 1)) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      } else if (state.routeGeometry && routeLayer.getBounds().isValid()) {
+        map.fitBounds(routeLayer.getBounds(), { padding: [40, 40] });
+      }
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Render Stop List
+    function renderStopList() {
+      stopCountEl.textContent = state.stops.length;
+      totalDistEl.textContent = formatDistance(state.summary.totalDistanceMeters);
+      totalTimeEl.textContent = formatDuration(state.summary.totalDurationSeconds);
+
+      if (state.summary.provider) {
+        if (state.summary.isFallback) {
+          routeTypeEl.textContent = 'Straight-line estimate';
+          routeTypeEl.style.color = '#f59e0b';
+        } else {
+          routeTypeEl.textContent = 'Road route (OSRM)';
+          routeTypeEl.style.color = '#10b981';
+        }
+      } else {
+        routeTypeEl.textContent = 'Not calculated';
+        routeTypeEl.style.color = '#9ca3af';
+      }
+
+      if (state.stops.length === 0) {
+        stopListEl.innerHTML = '<div class="empty-state">No stops added yet.<br>Add an address above or import a CSV.</div>';
+        return;
+      }
+
+      var html = '';
+      state.stops.forEach(function (stop, idx) {
+        var isLocked = stop.metadata && stop.metadata.locked;
+        var geoStatus = (stop.metadata && stop.metadata.geocodeStatus) || 'ok';
+        var statusBadge = '';
+
+        if (geoStatus === 'ambiguous') {
+          statusBadge = '<span class="stop-status-pill status-ambiguous">Ambiguous location</span>';
+        } else if (geoStatus === 'not_found' || geoStatus === 'error') {
+          statusBadge = '<span class="stop-status-pill status-error">Not found</span>';
+        }
+
+        html += '<div class="stop-item ' + (isLocked ? 'locked' : '') + '" data-stop-id="' + stop.stopId + '">' +
+          '<div class="stop-seq-badge">' + (idx + 1) + '</div>' +
+          '<div class="stop-details">' +
+            '<div class="stop-name">' + escapeHtml(stop.name) + '</div>' +
+            '<div class="stop-address">' + escapeHtml(stop.address) + '</div>' +
+            statusBadge +
+          '</div>' +
+          '<div class="stop-actions">' +
+            '<button class="icon-btn ' + (isLocked ? 'active' : '') + '" title="' + (isLocked ? 'Unlock stop' : 'Lock stop in place') + '" onclick="toggleLock(\'' + stop.stopId + '\')">' +
+              (isLocked ? '🔒' : '🔓') +
+            '</button>' +
+            '<button class="icon-btn" title="Move Up" ' + (idx === 0 ? 'disabled' : '') + ' onclick="moveStop(' + idx + ', -1)">↑</button>' +
+            '<button class="icon-btn" title="Move Down" ' + (idx === state.stops.length - 1 ? 'disabled' : '') + ' onclick="moveStop(' + idx + ', 1)">↓</button>' +
+            '<button class="icon-btn" style="color:#ef4444;" title="Delete" onclick="deleteStop(\'' + stop.stopId + '\')">×</button>' +
+          '</div>' +
+        '</div>';
+      });
+
+      stopListEl.innerHTML = html;
+    }
+
+    // Polling logic: Every 3.5 seconds checks revision
+    function startPolling() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(function () {
+        if (!state.routeId || state.isSaving) return;
+
+        callServer('getRouteRevision', { routeId: state.routeId })
+          .then(function (res) {
+            updateSyncUI('connected', 'Connected');
+            if (res.revision > state.expectedRevision) {
+              // Remote changes detected, pull fresh route
+              updateSyncUI('syncing', 'Syncing...');
+              pullRoute(state.routeId);
+            }
+          })
+          .catch(function (err) {
+            updateSyncUI('offline', 'Offline');
+          });
+      }, 3500);
+    }
+
+    function pullRoute(routeId) {
+      callServer('getRoute', { routeId: routeId })
+        .then(function (res) {
+          state.route = res.data.route;
+          state.stops = res.data.stops;
+          state.expectedRevision = res.revision;
+          titleInput.value = state.route.title || 'Untitled Route';
+          renderStopList();
+          renderMap();
+          updateSyncUI('connected', 'Connected');
+        })
+        .catch(function (err) {
+          showAlert('Failed to load route: ' + err.message, 'danger');
+        });
+    }
+
+    // Route title blur / change
+    titleInput.addEventListener('change', function () {
+      var newTitle = titleInput.value.trim() || 'Untitled Route';
+      state.isSaving = true;
+      updateSyncUI('syncing', 'Saving...');
+
+      callServer('updateRoute', {
+        routeId: state.routeId,
+        expectedRevision: state.expectedRevision,
+        changes: { title: newTitle }
+      })
+        .then(function (res) {
+          state.expectedRevision = res.revision;
+          state.route.title = newTitle;
+          updateSyncUI('connected', 'Saved');
+        })
+        .catch(function (err) {
+          handleWriteError(err);
+        })
+        .finally(function () {
+          state.isSaving = false;
+        });
+    });
+
+    // Write conflict handler
+    function handleWriteError(err) {
+      if (err.code === 'REVISION_CONFLICT') {
+        showAlert('Revision conflict: Another user modified this route. Reloading...', 'danger');
+        setTimeout(function () {
+          pullRoute(state.routeId);
+          dismissAlert();
+        }, 1500);
+      } else {
+        showAlert('Error: ' + err.message, 'danger');
+        updateSyncUI('offline', 'Save failed');
+      }
+    }
+
+    // Add Stop form
+    var addStopForm = document.getElementById('addStopForm');
+    var addStopInput = document.getElementById('addStopInput');
+    addStopForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var address = addStopInput.value.trim();
+      if (!address) return;
+
+      addStopInput.value = '';
+      state.isSaving = true;
+      updateSyncUI('syncing', 'Adding stop...');
+
+      callServer('addStop', {
+        routeId: state.routeId,
+        expectedRevision: state.expectedRevision,
+        stop: {
+          address: address,
+          name: address.split(',')[0].trim() || 'Stop'
+        }
+      })
+        .then(function (res) {
+          state.expectedRevision = res.revision;
+          state.stops.push(res.data);
+          renderStopList();
+          renderMap();
+          updateSyncUI('connected', 'Saved');
+        })
+        .catch(function (err) {
+          handleWriteError(err);
+        })
+        .finally(function () {
+          state.isSaving = false;
+        });
+    });
+
+    // Toggle stop lock
+    window.toggleLock = function (stopId) {
+      var stop = state.stops.find(function (s) { return s.stopId === stopId; });
+      if (!stop) return;
+
+      var newLocked = !(stop.metadata && stop.metadata.locked);
+      state.isSaving = true;
+      updateSyncUI('syncing', 'Updating lock...');
+
+      callServer('updateStop', {
+        routeId: state.routeId,
+        expectedRevision: state.expectedRevision,
+        stopId: stopId,
+        changes: {
+          metadata: { locked: newLocked }
+        }
+      })
+        .then(function (res) {
+          state.expectedRevision = res.revision;
+          stop.metadata.locked = newLocked;
+          renderStopList();
+          renderMap();
+          updateSyncUI('connected', 'Saved');
+        })
+        .catch(handleWriteError)
+        .finally(function () { state.isSaving = false; });
+    };
+
+    // Move Stop Up/Down
+    window.moveStop = function (index, direction) {
+      var targetIdx = index + direction;
+      if (targetIdx < 0 || targetIdx >= state.stops.length) return;
+
+      var newStops = state.stops.slice();
+      var temp = newStops[index];
+      newStops[index] = newStops[targetIdx];
+      newStops[targetIdx] = temp;
+
+      var seqIds = newStops.map(function (s) { return s.stopId; });
+      state.isSaving = true;
+      updateSyncUI('syncing', 'Reordering...');
+
+      callServer('reorderStops', {
+        routeId: state.routeId,
+        expectedRevision: state.expectedRevision,
+        sequence: seqIds
+      })
+        .then(function (res) {
+          state.expectedRevision = res.revision;
+          state.stops = res.data;
+          renderStopList();
+          renderMap();
+          updateSyncUI('connected', 'Saved');
+        })
+        .catch(handleWriteError)
+        .finally(function () { state.isSaving = false; });
+    };
+
+    // Delete Stop
+    window.deleteStop = function (stopId) {
+      state.isSaving = true;
+      updateSyncUI('syncing', 'Deleting...');
+
+      callServer('removeStop', {
+        routeId: state.routeId,
+        expectedRevision: state.expectedRevision,
+        stopId: stopId
+      })
+        .then(function (res) {
+          state.expectedRevision = res.revision;
+          state.stops = state.stops.filter(function (s) { return s.stopId !== stopId; });
+          state.stops.forEach(function (s, idx) { s.sequence = idx; });
+          renderStopList();
+          renderMap();
+          updateSyncUI('connected', 'Saved');
+        })
+        .catch(handleWriteError)
+        .finally(function () { state.isSaving = false; });
+    };
+
+    // Calculate Route
+    window.calculateRoute = function (forcedProvider) {
+      if (state.stops.length < 2) {
+        showAlert('Please add at least 2 stops before calculating a route.', 'warning', 4000);
+        return;
+      }
+
+      updateSyncUI('syncing', 'Calculating route...');
+      callServer('calculateRoute', {
+        routeId: state.routeId,
+        provider: forcedProvider || 'osrm'
+      })
+        .then(function (res) {
+          var data = res.data;
+          state.routeGeometry = data.geometry;
+          state.summary = {
+            totalDistanceMeters: data.totalDistanceMeters,
+            totalDurationSeconds: data.totalDurationSeconds,
+            provider: data.provider,
+            isFallback: data.isFallback
+          };
+
+          if (data.isFallback) {
+            showAlert('OSRM was unavailable or points were unreachable. Showing straight-line fallback.', 'warning', 6000);
+          } else {
+            showAlert('Road route calculated successfully.', 'warning', 2500);
+          }
+
+          renderStopList();
+          renderMap();
+          updateSyncUI('connected', 'Route ready');
+        })
+        .catch(function (err) {
+          showAlert('Routing error: ' + err.message, 'danger');
+          updateSyncUI('connected', 'Routing error');
+        });
+    };
+
+    // Optimize Route
+    window.optimizeRoute = function () {
+      if (state.stops.length < 3) {
+        showAlert('Add at least 3 stops to run route optimization.', 'warning', 4000);
+        return;
+      }
+
+      updateSyncUI('syncing', 'Optimizing sequence...');
+      callServer('optimizeRoute', {
+        routeId: state.routeId,
+        options: { fixedStart: true, fixedEnd: false, lockedStops: true }
+      })
+        .then(function (res) {
+          var data = res.data;
+          state.expectedRevision = res.revision;
+          state.stops = data.stops;
+
+          var origKm = (data.originalDistanceMeters / 1000).toFixed(1);
+          var optKm = (data.optimizedDistanceMeters / 1000).toFixed(1);
+          var pct = data.savingsPercent;
+
+          showAlert('Route optimized! Distance reduced from ' + origKm + ' km to ' + optKm + ' km (' + pct + '% savings).', 'warning', 6000);
+
+          renderStopList();
+          // Recalculate route polyline
+          calculateRoute('osrm');
+        })
+        .catch(handleWriteError);
+    };
+
+    // CSV / Paste Import Modal
+    window.openImportModal = function () {
+      importModal.style.display = 'flex';
+      document.getElementById('pasteAddresses').value = '';
+      document.getElementById('importError').style.display = 'none';
+    };
+
+    window.closeImportModal = function () {
+      importModal.style.display = 'none';
+    };
+
+    window.processImport = function () {
+      var text = document.getElementById('pasteAddresses').value.trim();
+      var errEl = document.getElementById('importError');
+      if (!text) {
+        errEl.textContent = 'Please paste addresses or CSV text.';
+        errEl.style.display = 'block';
+        return;
+      }
+
+      // Quick client-side parse
+      var lines = text.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      if (lines.length === 0) return;
+
+      closeImportModal();
+      showAlert('Importing and geocoding ' + lines.length + ' stops...', 'warning');
+
+      var addedCount = 0;
+      function importNext(index) {
+        if (index >= lines.length) {
+          showAlert('Successfully imported ' + addedCount + ' stops.', 'warning', 4000);
+          return;
+        }
+
+        var line = lines[index];
+        // Strip quotes if any
+        var addr = line.replace(/^["']|["']$/g, '').trim();
+
+        callServer('addStop', {
+          routeId: state.routeId,
+          expectedRevision: state.expectedRevision,
+          stop: { name: addr.split(',')[0].trim(), address: addr }
+        })
+          .then(function (res) {
+            state.expectedRevision = res.revision;
+            state.stops.push(res.data);
+            addedCount++;
+            renderStopList();
+            renderMap();
+            importNext(index + 1);
+          })
+          .catch(function (err) {
+            console.error('Import row failed', err);
+            importNext(index + 1);
+          });
+      }
+
+      importNext(0);
+    };
+
+    // Export CSV
+    window.exportCSV = function () {
+      callServer('exportRoute', { routeId: state.routeId, format: 'csv' })
+        .then(function (res) {
+          var blob = new Blob([res.data.content], { type: 'text/csv;charset=utf-8;' });
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = res.data.filename || 'RouteForge-stops.csv';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        })
+        .catch(function (err) {
+          showAlert('Export failed: ' + err.message, 'danger');
+        });
+    };
+
+    // Copy Share Link
+    window.copyShareUrl = function () {
+      var url = window.location.origin + window.location.pathname + '?routeId=' + state.routeId;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(function () {
+          showAlert('Shareable URL copied to clipboard!', 'warning', 3000);
+        });
+      } else {
+        prompt('Copy this RouteForge URL:', url);
+      }
+    };
+
+    // Initialize application
+    function initApp() {
+      initMap();
+
+      // Check URL for existing routeId
+      var params = new URLSearchParams(window.location.search);
+      var queryRouteId = params.get('routeId');
+
+      if (queryRouteId) {
+        state.routeId = queryRouteId;
+        pullRoute(queryRouteId);
+        startPolling();
+      } else {
+        // Create new route on server
+        updateSyncUI('syncing', 'Creating route...');
+        callServer('createRoute', { title: 'New Multi-Stop Route' })
+          .then(function (res) {
+            state.routeId = res.data.routeId;
+            state.expectedRevision = res.revision;
+            state.route = { title: 'New Multi-Stop Route', revision: res.revision };
+            titleInput.value = state.route.title;
+
+            // Update URL without full refresh
+            if (window.history.pushState) {
+              var newUrl = window.location.pathname + '?routeId=' + state.routeId;
+              window.history.pushState({ path: newUrl }, '', newUrl);
+            }
+
+            renderStopList();
+            startPolling();
+            updateSyncUI('connected', 'Connected');
+          })
+          .catch(function (err) {
+            showAlert('Failed to initialize route: ' + err.message, 'danger');
+          });
+      }
+    }
+
+    // Run when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initApp);
+    } else {
+      initApp();
+    }
+  })();
+</script>
+
