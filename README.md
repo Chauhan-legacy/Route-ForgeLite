@@ -69,11 +69,6 @@ npx vercel --prod
 
 Or push to GitHub and import via the Vercel Dashboard:
 ```cmd
-git init
-git add .
-git commit -m "feat: RouteForge publication release"
-git branch -M main
-git remote add origin https://github.com/<your-username>/routeforge.git
 git push -u origin main
 ```
 *The included [`vercel.json`](vercel.json) configures Vite building and SPA rewrites automatically.*
@@ -108,6 +103,31 @@ ROUTE-FORGE0/
 ├── vercel.json               # Vercel Hobby deployment manifest
 └── requirements.txt          # Python dependencies (fastapi, ortools, etc.)
 ```
+
+---
+
+## Live Traffic Tracking Architecture & Roadmap
+
+To expand RouteForge with real-time congestion tracking and live traffic-aware routing while preserving the **free-tier** philosophy:
+
+```mermaid
+flowchart TD
+    A["Traffic Provider (TomTom / HERE Free Tiers)"] -->|"Flow Vector Tiles & Incidents"| B["MapLibre GL Visual Traffic Layer"]
+    A -->|"Congestion Multipliers τ(i, j)"| C["Dynamic Cost Matrix Engine"]
+    C -->|"Traffic-Weighted Distance C(i, j)"| D["Google OR-Tools GLS Solver"]
+    D -->|"Congestion-Bypassing Sequence"| E["RouteForge Active UI"]
+```
+
+1. **Visual Traffic Overlay (MapLibre GL)**:
+   - Integrate vector traffic flow tiles from **TomTom** (Free Tier: 2,500 req/day) or **HERE Maps** (Free Tier: 250,000 transactions/month).
+   - Render color-coded speed brackets directly onto the MapLibre canvas: Green ($\ge 85\%$ free-flow), Yellow ($50\% - 85\%$), Red ($25\% - 50\%$), and Dark Red ($< 25\%$ standstill).
+2. **Dynamic Edge Weighting in TSP Optimizer**:
+   - Instead of pure spatial distance $d_{ij}$, the cost matrix incorporates dynamic congestion coefficients:
+     $$C_{ij} = d_{ij} \times \tau_{ij}$$
+     where $\tau_{ij} = \frac{v_{\text{free}}}{v_{\text{live}}}$ represents the real-time delay penalty on road segment $(i, j)$.
+   - Google OR-Tools automatically diverts delivery routes around urban bottlenecks and accidents.
+3. **Reactive Re-Routing Loop**:
+   - Background polling every 180 seconds detects emerging traffic jams and prompts the user with a single-click: `Faster route detected (-14 mins). Re-optimize?`.
 
 ---
 
