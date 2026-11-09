@@ -2,13 +2,17 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Stop } from '../types';
-import { Maximize2, Minimize2, Crosshair, Layers } from 'lucide-react';
+import { Maximize2, Minimize2, Crosshair, Target, MapPin } from 'lucide-react';
 
 interface MapProps {
   stops: Stop[];
   routeGeometry: any | null;
   onMapClick?: (lat: number, lng: number) => void;
   onSelectStop?: (stopId: string) => void;
+  onStopMove?: (stopId: string, lat: number, lng: number) => void;
+  onMapCenterChange?: (center: { lat: number; lng: number }) => void;
+  isPinpointMode?: boolean;
+  onTogglePinpointMode?: () => void;
 }
 
 // 100% Free Vector Map Styles from OpenFreeMap (Zero API Key, Zero Watermarks, Zero Cost)
@@ -31,7 +35,11 @@ export const Map: React.FC<MapProps> = ({
   stops,
   routeGeometry,
   onMapClick,
-  onSelectStop
+  onSelectStop,
+  onStopMove,
+  onMapCenterChange,
+  isPinpointMode,
+  onTogglePinpointMode
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
@@ -191,6 +199,14 @@ export const Map: React.FC<MapProps> = ({
       }
     });
 
+    // Notify map center changes for viewport-biased autocomplete
+    map.on('moveend', () => {
+      if (onMapCenterChange) {
+        const c = map.getCenter();
+        onMapCenterChange({ lat: c.lat, lng: c.lng });
+      }
+    });
+
     mapInstanceRef.current = map;
 
     return () => {
@@ -291,10 +307,25 @@ export const Map: React.FC<MapProps> = ({
         if (onSelectStop) onSelectStop(stop.stopId);
       });
 
-      const marker = new maplibregl.Marker({ element: el })
+      el.style.cursor = 'grab';
+      el.title = `Stop ${idx + 1}: ${stop.name} (Drag to pinpoint exact position)`;
+
+      const marker = new maplibregl.Marker({ element: el, draggable: true })
         .setLngLat([stop.resolvedLng, stop.resolvedLat])
         .setPopup(popup)
         .addTo(map);
+
+      marker.on('dragstart', () => {
+        el.style.cursor = 'grabbing';
+      });
+
+      marker.on('dragend', () => {
+        el.style.cursor = 'grab';
+        const lngLat = marker.getLngLat();
+        if (onStopMove) {
+          onStopMove(stop.stopId, lngLat.lat, lngLat.lng);
+        }
+      });
 
       markersRef.current.push(marker);
     });
@@ -305,7 +336,7 @@ export const Map: React.FC<MapProps> = ({
       validStops.forEach(s => bounds.extend([s.resolvedLng, s.resolvedLat]));
       map.fitBounds(bounds, { padding: 60, maxZoom: 15, duration: 600 });
     }
-  }, [stops, routeGeometry, onSelectStop]);
+  }, [stops, routeGeometry, onSelectStop, onStopMove]);
 
   // Update Route Polyline when geometry updates
   useEffect(() => {
@@ -349,11 +380,39 @@ export const Map: React.FC<MapProps> = ({
   };
 
   return (
-    <div className={`relative w-full h-full bg-[#F4F1EA] overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
+    <div className={`relative w-full h-full bg-[#F4F1EA] overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''} ${isPinpointMode ? 'cursor-crosshair' : ''}`}>
       <div ref={mapContainerRef} className="w-full h-full" />
+
+      {/* Pinpoint Mode Banner */}
+      {isPinpointMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[450] flex items-center gap-2 px-4 py-2 rounded-full bg-editorial-ink text-white shadow-float text-xs font-medium animate-in fade-in duration-150">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+          <span>Crosshair Pinpoint Mode: Click anywhere on map to drop a waypoint</span>
+          <button
+            onClick={onTogglePinpointMode}
+            className="ml-2 text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 text-white"
+          >
+            Done
+          </button>
+        </div>
+      )}
 
       {/* Floating Action Controls */}
       <div className="absolute top-4 right-4 z-[400] flex items-center gap-2">
+        {/* Pinpoint Crosshair Tool Toggle */}
+        <button
+          onClick={onTogglePinpointMode}
+          className={`flex items-center gap-1.5 h-8 px-2.5 rounded-xl border transition-colors shadow-card text-xs font-medium ${
+            isPinpointMode
+              ? 'bg-red-600 text-white border-red-700 shadow-md'
+              : 'bg-white hover:bg-editorial-subsurface text-editorial-body hover:text-editorial-ink border-editorial-border'
+          }`}
+          title="Toggle Sub-meter Pinpoint Mode (Click map to drop waypoint)"
+        >
+          <Target className="w-4 h-4" />
+          <span className="hidden sm:inline">{isPinpointMode ? 'Crosshair On' : 'Drop Pin'}</span>
+        </button>
+
         {/* OpenFreeMap Style Switcher */}
         <div className="flex items-center p-0.5 rounded-xl bg-white border border-editorial-border shadow-card">
           {(Object.keys(OPENFREEMAP_STYLES) as Array<keyof typeof OPENFREEMAP_STYLES>).map((k) => (
@@ -395,9 +454,9 @@ export const Map: React.FC<MapProps> = ({
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
         <span>OpenFreeMap Vector Tiles</span>
         <span className="text-editorial-border">|</span>
-        <span>MapLibre GL</span>
+        <span>Draggable Waypoints Active</span>
         <span className="text-editorial-border">|</span>
-        <span>Click map to place waypoint</span>
+        <span>Sub-Meter Precision</span>
       </div>
     </div>
   );

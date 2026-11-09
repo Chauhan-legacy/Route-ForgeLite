@@ -28,6 +28,8 @@ export const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('connected');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [activeMobileTab, setActiveMobileTab] = useState<'map' | 'stops'>('map');
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 37.7749, lng: -122.4194 });
+  const [isPinpointMode, setIsPinpointMode] = useState<boolean>(false);
 
   // Modals
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -139,14 +141,20 @@ export const App: React.FC = () => {
     await updateRouteCalculation(stops, mode, currentRoute?.routeId);
   };
 
-  // Add Stop
-  const handleAddStop = async (address: string) => {
+  // Add Stop (supports precision coordinates, direct titles, metadata)
+  const handleAddStop = async (
+    address: string,
+    name?: string,
+    lat?: number | null,
+    lng?: number | null,
+    metadata?: any
+  ) => {
     if (!currentRoute) return;
     setIsSaving(true);
     setSyncStatus('syncing');
 
     try {
-      const res = await api.addStop(currentRoute.routeId, revision, address);
+      const res = await api.addStop(currentRoute.routeId, revision, address, name, lat, lng, metadata);
       const updatedStops = [...stops, res.stop];
       setStops(updatedStops);
       setRevision(res.revision);
@@ -159,6 +167,93 @@ export const App: React.FC = () => {
       showToast(`Failed to add waypoint: ${err.message}`, 'warning');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Map Click Waypoint Placement with Instant Reverse Geocoding
+  const handleMapClick = async (lat: number, lng: number) => {
+    if (!currentRoute) return;
+    setIsSaving(true);
+    try {
+      const rev = await api.reverseGeocode(lat, lng);
+      const stopName = rev.title || `Waypoint ${stops.length + 1}`;
+      const stopAddress = rev.fullAddress || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
+      const res = await api.addStop(
+        currentRoute.routeId,
+        revision,
+        stopAddress,
+        stopName,
+        lat,
+        lng,
+        {
+          precision: 'sub-meter',
+          source: 'map_pinpoint',
+          displayName: stopAddress,
+        }
+      );
+
+      const updatedStops = [...stops, res.stop];
+      setStops(updatedStops);
+      setRevision(res.revision);
+      showToast(`Placed waypoint: ${stopName}`, 'success');
+      setIsPinpointMode(false);
+      await updateRouteCalculation(updatedStops, summary.mode, currentRoute.routeId);
+    } catch (err: any) {
+      showToast(`Failed to place waypoint: ${err.message}`, 'warning');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Marker Reposition on Drag End
+  const handleStopMove = async (stopId: string, newLat: number, newLng: number) => {
+    if (!currentRoute) return;
+    const targetStop = stops.find(s => s.stopId === stopId);
+    if (!targetStop) return;
+
+    // Optimistically update positions
+    const optimisticStops = stops.map(s => {
+      if (s.stopId === stopId) {
+        return {
+          ...s,
+          latitude: newLat,
+          longitude: newLng,
+          lat: newLat,
+          lng: newLng,
+          metadata: {
+            ...s.metadata,
+            precision: 'sub-meter' as const,
+          }
+        };
+      }
+      return s;
+    });
+    setStops(optimisticStops);
+    await updateRouteCalculation(optimisticStops, summary.mode, currentRoute.routeId);
+
+    try {
+      const rev = await api.reverseGeocode(newLat, newLng);
+      const updatedName = rev.title || targetStop.name;
+      const updatedAddress = rev.fullAddress || `${newLat.toFixed(5)}, ${newLng.toFixed(5)}`;
+
+      const res = await api.updateStop(currentRoute.routeId, revision, stopId, {
+        name: updatedName,
+        address: updatedAddress,
+        latitude: newLat,
+        longitude: newLng,
+        metadata: {
+          ...targetStop.metadata,
+          precision: 'sub-meter',
+          displayName: updatedAddress,
+        }
+      });
+
+      setRevision(res.revision);
+      setStops(current => current.map(s => s.stopId === stopId ? res.stop : s));
+      showToast(`Repositioned: ${updatedName} (Sub-meter Pin)`, 'success');
+    } catch (err: any) {
+      console.warn('Persist reposition error:', err);
     }
   };
 
@@ -486,6 +581,7 @@ export const App: React.FC = () => {
             onReverse={handleReverse}
             onOpenImport={() => setIsImportOpen(true)}
             isSaving={isSaving}
+            mapCenter={mapCenter}
           />
         </div>
 
@@ -494,21 +590,11 @@ export const App: React.FC = () => {
           <Map
             stops={stops}
             routeGeometry={routeGeometry}
-            onMapClick={async (lat, lng) => {
-              const confirmAdd = window.confirm(`Place waypoint at: ${lat.toFixed(4)}, ${lng.toFixed(4)}?`);
-              if (confirmAdd && currentRoute) {
-                const res = await api.addStop(currentRoute.routeId, revision, `${lat.toFixed(4)}, ${lng.toFixed(4)}`, `Waypoint ${stops.length + 1}`);
-                const updRes = await api.updateStop(currentRoute.routeId, res.revision, res.stop.stopId, {
-                  latitude: lat,
-                  longitude: lng
-                });
-                const newStops = [...stops, updRes.stop];
-                setStops(newStops);
-                setRevision(updRes.revision);
-                updateRouteCalculation(newStops, summary.mode, currentRoute.routeId);
-                showToast('Waypoint added from map', 'success');
-              }
-            }}
+            onMapClick={handleMapClick}
+            onStopMove={handleStopMove}
+            onMapCenterChange={setMapCenter}
+            isPinpointMode={isPinpointMode}
+            onTogglePinpointMode={() => setIsPinpointMode(prev => !prev)}
           />
         </div>
 

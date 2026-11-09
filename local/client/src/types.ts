@@ -9,6 +9,9 @@ export interface StopMetadata {
   geocodeStatus?: 'ok' | 'ambiguous' | 'not_found' | 'error';
   displayName?: string;
   source?: string;
+  precision?: 'sub-meter' | 'verified' | 'approximate';
+  snappedToRoad?: boolean;
+  snappedDistanceMeters?: number;
   [key: string]: any;
 }
 

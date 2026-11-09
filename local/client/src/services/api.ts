@@ -4,6 +4,7 @@
  */
 import { Stop, RouteData, TransportMode, OptimizationOptions, OptimizationResult } from '../types';
 import { clientOptimizeStops, clientComputeRoute, clientGeocodeAddress } from './clientRouting';
+import { reverseGeocodeCoordinates, searchLocationSuggestions, GeocodeSuggestion } from './geocodingService';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -94,14 +95,29 @@ export async function addStop(
   routeId: string,
   expectedRevision: number,
   address: string,
-  name?: string
+  name?: string,
+  lat?: number | null,
+  lng?: number | null,
+  metadata?: any
 ): Promise<{ stop: Stop; revision: number }> {
+  const stopPayload: any = {
+    address,
+    name: name || address.split(',')[0].trim() || 'Stop',
+  };
+  if (lat != null && lng != null) {
+    stopPayload.latitude = lat;
+    stopPayload.longitude = lng;
+  }
+  if (metadata) {
+    stopPayload.metadata = metadata;
+  }
+
   if (isBackendAvailable) {
     try {
       const res = await postApi('addStop', {
         routeId,
         expectedRevision,
-        stop: { address, name: name || address.split(',')[0].trim() || 'Stop' },
+        stop: stopPayload,
       });
       return { stop: res.data, revision: res.revision };
     } catch (e) {
@@ -109,8 +125,20 @@ export async function addStop(
     }
   }
 
-  // Client-side geocoding & storage
-  const geo = await clientGeocodeAddress(address);
+  // Client-side geocoding & storage if lat/lng not already provided
+  let finalLat = lat ?? null;
+  let finalLng = lng ?? null;
+  let status = metadata?.geocodeStatus || 'ok';
+  let displayName = metadata?.displayName || address;
+
+  if (finalLat == null || finalLng == null) {
+    const geo = await clientGeocodeAddress(address);
+    finalLat = geo.lat;
+    finalLng = geo.lng;
+    status = geo.status;
+    displayName = geo.displayName;
+  }
+
   const stopId = `stop_${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
   const newStop: Stop = {
     stopId,
@@ -118,12 +146,16 @@ export async function addStop(
     sequence: 999,
     name: name || address.split(',')[0].trim() || 'Stop',
     address,
-    latitude: geo.lat,
-    longitude: geo.lng,
+    latitude: finalLat,
+    longitude: finalLng,
+    lat: finalLat,
+    lng: finalLng,
     metadata: {
-      geocodeStatus: geo.status,
-      displayName: geo.displayName,
+      geocodeStatus: status,
+      displayName,
       locked: false,
+      precision: metadata?.precision || (lat != null ? 'sub-meter' : 'verified'),
+      ...metadata,
     },
   };
 
@@ -281,4 +313,29 @@ export async function listRoutes(): Promise<RouteData[]> {
   }
   return routes;
 }
+
+export async function reverseGeocode(lat: number, lng: number): Promise<{ title: string; fullAddress: string; lat: number; lng: number }> {
+  if (isBackendAvailable) {
+    try {
+      const res = await postApi('reverseGeocode', { lat, lng });
+      if (res.data) {
+        return {
+          title: res.data.title || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          fullAddress: res.data.displayName || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+          lat,
+          lng,
+        };
+      }
+    } catch (e) {
+      console.warn("Backend reverseGeocode failed, using client reverse geocoder:", e);
+    }
+  }
+
+  return await reverseGeocodeCoordinates(lat, lng);
+}
+
+export async function searchLocations(query: string, mapCenter?: { lat: number; lng: number }): Promise<GeocodeSuggestion[]> {
+  return await searchLocationSuggestions(query, mapCenter);
+}
+
 

@@ -102,6 +102,10 @@ class ExportRouteRequest(BaseModel):
 class GeocodeRequest(BaseModel):
     address: str
 
+class ReverseGeocodeRequest(BaseModel):
+    lat: float
+    lng: float
+
 class ImportSheetsRequest(BaseModel):
     spreadsheetId: str
 
@@ -339,6 +343,11 @@ def api_export_route(req: ExportRouteRequest):
 @app.post("/api/geocode")
 async def api_geocode(req: GeocodeRequest):
     res = await geocoder.geocode_address(req.address)
+    return {"ok": True, "data": res}
+
+@app.post("/api/reverseGeocode")
+async def api_reverse_geocode(req: ReverseGeocodeRequest):
+    res = await geocoder.reverse_geocode(req.lat, req.lng)
     return {"ok": True, "data": res}
 
 @app.post("/api/importGoogleSheets")
